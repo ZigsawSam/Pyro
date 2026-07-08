@@ -25,35 +25,70 @@ export default function ShopRegisterPage() {
     setLoading(true)
     setError("")
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { role: "shop_owner" } },
-    })
+    try {
+      // 1. Sign up with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { role: "shop_owner" } },
+      })
 
-    if (authError || !authData.user) {
-      setError(authError?.message || "Registration failed")
+      if (authError) {
+        setError(authError.message)
+        setLoading(false)
+        return
+      }
+
+      if (!authData.user) {
+        setError("Registration failed — no user returned")
+        setLoading(false)
+        return
+      }
+
+      // 2. Sign in immediately to get an active session (needed for RLS insert)
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (signInError) {
+        setError("Account created but auto-login failed. Please log in manually.")
+        setLoading(false)
+        router.push("/auth/shop-login")
+        return
+      }
+
+      // 3. Insert shop with user_id (now we have an active session)
+      const { data: shopInsert, error: dbError } = await supabase
+        .from("shops")
+        .insert({
+          user_id: authData.user.id,
+          shop_name: shopName,
+          owner_name: ownerName,
+          phone,
+          email,
+          city,
+          state,
+        })
+        .select("id")
+        .single()
+
+      if (dbError) {
+        setError(dbError.message)
+        setLoading(false)
+        return
+      }
+
+      // 4. Redirect to the new shop dashboard
+      if (shopInsert?.id) {
+        router.push(`/shop/${shopInsert.id}/dashboard`)
+      } else {
+        router.push("/")
+      }
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred")
       setLoading(false)
-      return
     }
-
-    const { error: dbError } = await supabase.from("shops").insert({
-      user_id: authData.user.id,
-      shop_name: shopName,
-      owner_name: ownerName,
-      phone,
-      email,
-      city,
-      state,
-    })
-
-    if (dbError) {
-      setError(dbError.message)
-      setLoading(false)
-      return
-    }
-
-    router.push("/shop/dashboard")
   }
 
   return (
