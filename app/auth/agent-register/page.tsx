@@ -78,20 +78,21 @@ export default function AgentRegisterPage() {
       }
 
       // 4. Insert agent profile
-      const { data: agent, error: dbError } = await supabase
+      const { data: agentInsert, error: dbError } = await supabase
         .from("agents")
         .insert({
-          user_id: authData.user.id,
-          name: formData.name,
-          phone_number: formData.phoneNumber,
-          account_name: formData.accountName,
-          account_number: formData.accountNumber,
-          bank_name: formData.bankName,
-          ifsc_code: formData.ifscCode,
-          upi_id: formData.upiId,
-        })
-        .select("id")
-        .single()
+        user_id: authData.user.id,
+        name: formData.name,
+        phone_number: formData.phoneNumber,
+        account_name: formData.accountName,
+        account_number: formData.accountNumber,
+        bank_name: formData.bankName,
+        ifsc_code: formData.ifscCode,
+        upi_id: formData.upiId,
+        // NO unique_id here — database auto-generates it
+  })
+  .select("id")
+  .single()
 
       if (dbError) {
         setError(dbError.message)
