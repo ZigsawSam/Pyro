@@ -2,163 +2,77 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import Link from "next/link"
+import { Card } from "@/components/ui/card"
+import { Loader2 } from "lucide-react"
 
 export default function ShopRegisterPage() {
   const router = useRouter()
-  const [formData, setFormData] = useState({
-    shopName: "",
-    ownerName: "",
-    email: "",
-    phone: "",
-    city: "",
-    state: "",
-  })
+  const supabase = createClient()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [shopName, setShopName] = useState("")
+  const [ownerName, setOwnerName] = useState("")
+  const [phone, setPhone] = useState("")
+  const [city, setCity] = useState("")
+  const [state, setState] = useState("")
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    })
-  }
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleRegister = async () => {
+    setLoading(true)
     setError("")
-    setIsLoading(true)
 
-    try {
-      if (!formData.shopName || !formData.ownerName || !formData.email || !formData.phone) {
-        setError("Please fill in all required fields")
-        setIsLoading(false)
-        return
-      }
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { role: "shop_owner" } },
+    })
 
-      const response = await fetch("/api/auth/shop-register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        setError(data.error || "Registration failed")
-        setIsLoading(false)
-        return
-      }
-
-      const data = await response.json()
-      localStorage.setItem("shop_session", JSON.stringify(data.shop))
-      localStorage.setItem("shop_token", data.token || "")
-
-      await new Promise(resolve => setTimeout(resolve, 300))
-      router.push(`/shop/${data.shop.id}/dashboard`)
-    } catch (err) {
-      setError("An error occurred. Please try again.")
-    } finally {
-      setIsLoading(false)
+    if (authError || !authData.user) {
+      setError(authError?.message || "Registration failed")
+      setLoading(false)
+      return
     }
+
+    const { error: dbError } = await supabase.from("shops").insert({
+      user_id: authData.user.id,
+      shop_name: shopName,
+      owner_name: ownerName,
+      phone,
+      email,
+      city,
+      state,
+    })
+
+    if (dbError) {
+      setError(dbError.message)
+      setLoading(false)
+      return
+    }
+
+    router.push("/shop/dashboard")
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-background rounded-lg border border-border shadow-lg p-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Register Your Shop</h1>
-        <p className="text-muted-foreground mb-6">Create a new shop account to get started</p>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleRegister} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Shop Name *</label>
-            <Input
-              type="text"
-              name="shopName"
-              placeholder="e.g., Shiv Tiles House"
-              value={formData.shopName}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Owner Name *</label>
-            <Input
-              type="text"
-              name="ownerName"
-              placeholder="e.g., Bharat Singh"
-              value={formData.ownerName}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Email *</label>
-            <Input
-              type="email"
-              name="email"
-              placeholder="owner@shop.com"
-              value={formData.email}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Phone *</label>
-            <Input
-              type="tel"
-              name="phone"
-              placeholder="9876543210"
-              value={formData.phone}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">City</label>
-            <Input
-              type="text"
-              name="city"
-              placeholder="e.g., Mumbai"
-              value={formData.city}
-              onChange={handleChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">State</label>
-            <Input
-              type="text"
-              name="state"
-              placeholder="e.g., Maharashtra"
-              value={formData.state}
-              onChange={handleChange}
-            />
-          </div>
-
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? "Creating..." : "Create Shop Account"}
-          </Button>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <Link href="/auth/shop-login" className="text-primary hover:underline">
-            Login here
-          </Link>
-        </div>
-      </div>
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="w-full max-w-md p-6 space-y-4">
+        <h1 className="text-2xl font-bold">Register Your Shop</h1>
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        <Input placeholder="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+        <Input placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
+        <Input placeholder="Shop Name" value={shopName} onChange={e => setShopName(e.target.value)} />
+        <Input placeholder="Owner Name" value={ownerName} onChange={e => setOwnerName(e.target.value)} />
+        <Input placeholder="Phone" value={phone} onChange={e => setPhone(e.target.value)} />
+        <Input placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
+        <Input placeholder="State" value={state} onChange={e => setState(e.target.value)} />
+        <Button onClick={handleRegister} disabled={loading} className="w-full">
+          {loading ? <Loader2 className="animate-spin mr-2" /> : null}
+          Register Shop
+        </Button>
+      </Card>
     </div>
   )
 }
