@@ -106,12 +106,12 @@ export default function AgentDashboardPage() {
 const fetchData = async (id: number) => {
   setLoading(true)
   
-  // 1. Fetch received invitations (shop → agent)
+    // 1. Fetch received invitations (shop → agent)
   let receivedInvitations: any[] = []
   try {
     const { data, error } = await supabase
       .from("agent_requests")
-      .select(`id, shop_id, commission_rate, message, requested_by, status, requested_at, shops:shop_id (shop_name, city, state)`)
+      .select(`id, shop_id, commission_rate, message, requested_by, status, requested_at`)
       .eq("agent_id", id)
       .eq("status", "pending")
     
@@ -119,6 +119,7 @@ const fetchData = async (id: number) => {
       console.error("agent_requests error:", error)
     } else {
       receivedInvitations = data || []
+      console.log("agent_requests data:", data)
     }
   } catch (e) {
     console.error("agent_requests catch:", e)
@@ -145,31 +146,43 @@ try {
   console.error("agent_link_requests catch:", e)
 }
 
-  // 3. Fetch shop names for sent requests separately
-  const shopIds = [...new Set(sentRequests.map((s) => s.shop_id))]
+    // 3. Fetch shop names for ALL requests
+  const allShopIds = [
+    ...new Set([
+      ...receivedInvitations.map((r) => r.shop_id),
+      ...sentRequests.map((s) => s.shop_id)
+    ])
+  ]
+  
   let shopMap: Record<number, any> = {}
-  if (shopIds.length > 0) {
+  if (allShopIds.length > 0) {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("shops")
         .select("id, shop_name, city, state")
-        .in("id", shopIds)
-      shopMap = (data || []).reduce((acc: any, s: any) => {
-        acc[s.id] = s
-        return acc
-      }, {})
+        .in("id", allShopIds)
+      
+      if (error) {
+        console.error("shops fetch error:", error)
+      } else {
+        shopMap = (data || []).reduce((acc: any, s: any) => {
+          acc[s.id] = s
+          return acc
+        }, {})
+        console.log("shops data:", data)
+      }
     } catch (e) {
-      console.error("shops fetch error:", e)
+      console.error("shops fetch catch:", e)
     }
   }
 
-  // 4. Merge invitations
+    // 4. Merge invitations
   const formattedInvitations = [
     ...receivedInvitations.map((inv: any) => ({
       id: inv.id,
       shop_id: inv.shop_id,
-      shop_name: inv.shops?.shop_name || "Unknown Shop",
-      shop_location: `${inv.shops?.city || ""}, ${inv.shops?.state || ""}`,
+      shop_name: shopMap[inv.shop_id]?.shop_name || "Unknown Shop",
+      shop_location: `${shopMap[inv.shop_id]?.city || ""}, ${shopMap[inv.shop_id]?.state || ""}`,
       commission_rate: inv.commission_rate,
       message: inv.message,
       requested_by: inv.requested_by,
@@ -413,58 +426,70 @@ try {
   }
 
       const handleInvitation = async (inviteId: number, action: "accept" | "reject") => {
-    setProcessingInvite(inviteId)
-    try {
-      // Find the invitation to determine source
-      const invitation = invitations.find((i) => i.id === inviteId)
-      
-      if (!invitation) {
-        alert("Invitation not found")
-        setProcessingInvite(null)
-        return
-      }
+  setProcessingInvite(inviteId)
+  try {
+    const invitation = invitations.find((i) => i.id === inviteId)
+    
+    if (!invitation) {
+      alert("Invitation not found")
+      setProcessingInvite(null)
+      return
+    }
 
-      // Agent can ONLY accept/reject shop-initiated requests (received)
-      if (invitation.requested_by === "agent") {
-        alert("You cannot accept or reject your own sent request. The shop must respond.")
-        setProcessingInvite(null)
-        return
-      }
+    if (invitation.requested_by === "agent") {
+      alert("You cannot accept or reject your own sent request. The shop must respond.")
+      setProcessingInvite(null)
+      return
+    }
 
-      const table = invitation._source || "agent_requests"
-      
-      const { error } = await supabase
+    const table = invitation._source || "agent_requests"
+    
+    console.log("Updating table:", table, "id:", inviteId, "action:", action)
+    
+    const { error } = await supabase
+      .from(table)
+      .update({ status: action === "accept" ? "approved" : "rejected" })
+      .eq("id", inviteId)
+
+    if (error) {
+      console.error("Update error:", error)
+      throw new Error(`Update failed: ${error.message}`)
+    }
+
+    if (action === "accept") {
+      const { data: req, error: fetchError } = await supabase
         .from(table)
-        .update({ status: action === "accept" ? "approved" : "rejected" })
+        .select("shop_id, agent_id, commission_rate")
         .eq("id", inviteId)
+        .single()
 
-      if (error) throw error
+      if (fetchError) {
+        console.error("Fetch req error:", fetchError)
+        throw fetchError
+      }
 
-      if (action === "accept") {
-        const { data: req } = await supabase
-          .from(table)
-          .select("shop_id, agent_id, commission_rate")
-          .eq("id", inviteId)
-          .single()
-
-        if (req) {
-          const { error: linkError } = await supabase.from("shop_agents").insert({
-            shop_id: req.shop_id,
-            agent_id: req.agent_id,
-            commission_rate: req.commission_rate,
-          })
-          if (linkError) throw linkError
+      if (req) {
+        console.log("Inserting shop_agents:", req)
+        const { error: linkError } = await supabase.from("shop_agents").insert({
+          shop_id: req.shop_id,
+          agent_id: req.agent_id,
+          commission_rate: req.commission_rate,
+        })
+        if (linkError) {
+          console.error("shop_agents insert error:", linkError)
+          throw new Error(`Link creation failed: ${linkError.message}`)
         }
       }
-
-      if (agentId) fetchData(agentId)
-    } catch (e) {
-      console.error("handleInvitation error:", e)
-      alert("Action failed")
-    } finally {
-      setProcessingInvite(null)
     }
+
+    if (agentId) fetchData(agentId)
+  } catch (e: any) {
+    console.error("handleInvitation error:", e)
+    alert(e.message || "Action failed")
+  } finally {
+    setProcessingInvite(null)
   }
+}
 
   const totalSalesAmount = Array.isArray(salesRecords) 
     ? salesRecords.reduce((sum, s) => sum + Number(s.amount || 0), 0) 
