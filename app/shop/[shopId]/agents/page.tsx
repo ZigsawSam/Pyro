@@ -73,7 +73,7 @@ export default function AgentsPage() {
       // Fetch shop_agents with agent details
       const { data: shopAgentsData, error: shopAgentsError } = await supabase
         .from("shop_agents")
-        .select("id, agent_id, commission_rate, agents:agent_id(id, name, phone_number, account_name, account_number, bank_name, ifsc_code, upi_id)")
+        .select("id, agent_id, commission_rate, agents:agent_id(id, name, phone_number, description, account_name, account_number, bank_name, ifsc_code, upi_id)")
         .eq("shop_id", shopId)
 
       if (shopAgentsError) throw shopAgentsError
@@ -161,7 +161,7 @@ export default function AgentsPage() {
     try {
       const { data: agents, error } = await supabase
         .from("agents")
-        .select("id, name, phone_number, upi_id, account_name, account_number, bank_name, ifsc_code, is_active, current_tier_id, shop_id, user_id")
+        .select("id, name, phone_number, description, upi_id, account_name, account_number, bank_name, ifsc_code, is_active, current_tier_id, shop_id, user_id")
         .eq("phone_number", existingPhone)
         .limit(1)
 
