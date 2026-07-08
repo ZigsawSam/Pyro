@@ -1,128 +1,124 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
-import { MainLayout } from "@/components/layout/main-layout"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
-import { StatCard } from "@/components/stat-card"
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-} from "recharts"
-import { TrendingUp, Users, DollarSign } from "lucide-react"
+import { Loader2, Download } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
-interface ReportData {
-  agent_name: string
-  total_sales: number
-  commission: number
-}
+export default function ShopReportsPage({ params }: { params: { shopId: string } }) {
+  const supabase = createClient()
+  const shopId = Number(params.shopId)
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [reportData, setReportData] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
 
-interface PayrollData {
-  month: string
-  total_paid: number
-  total_staff: number
-}
-
-export default function ReportsPage() {
-  const params = useParams()
-  const shopId = Number(params.shopId as string)
-  const [agentReport, setAgentReport] = useState<ReportData[]>([])
-  const [payrollReport, setPayrollReport] = useState<PayrollData[]>([])
-  const [totals, setTotals] = useState({ sales: 0, commission: 0, payroll: 0 })
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    fetchReports()
-  }, [shopId])
-
-  const fetchReports = async () => {
+  const generateReport = async () => {
+    setLoading(true)
     try {
-      const response = await fetch(`/api/shops/${shopId}/reports`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("shop_token")}` },
+      const from = dateFrom || new Date().toISOString().slice(0, 10)
+      const to = dateTo || new Date().toISOString().slice(0, 10)
+
+      // Sales summary
+      const { data: salesData } = await supabase
+        .from("sales")
+        .select("amount, commission_amount, sale_date")
+        .eq("shop_id", shopId)
+        .gte("sale_date", from)
+        .lte("sale_date", to)
+
+      // Payouts summary
+      const { data: payoutsData } = await supabase
+        .from("payouts")
+        .select("amount_paid, person_type, is_advance")
+        .eq("shop_id", shopId)
+        .gte("payment_date", from)
+        .lte("payment_date", to)
+
+      // Staff salary
+      const { data: salaryData } = await supabase
+        .from("salary")
+        .select("final_payable, status")
+        .eq("shop_id", shopId)
+        .eq("month", from.slice(0, 7))
+
+      const totalSales = (salesData || []).reduce((sum, s) => sum + Number(s.amount || 0), 0)
+      const totalCommission = (salesData || []).reduce((sum, s) => sum + Number(s.commission_amount || 0), 0)
+      const totalPayouts = (payoutsData || []).reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
+      const agentPayouts = (payoutsData || []).filter((p) => p.person_type === "agent").reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
+      const staffPayouts = (payoutsData || []).filter((p) => p.person_type === "staff").reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
+      const advances = (payoutsData || []).filter((p) => p.is_advance).reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
+      const totalSalary = (salaryData || []).reduce((sum, s) => sum + Number(s.final_payable || 0), 0)
+      const paidSalary = (salaryData || []).filter((s) => s.status === "paid").reduce((sum, s) => sum + Number(s.final_payable || 0), 0)
+
+      setReportData({
+        totalSales,
+        totalCommission,
+        totalPayouts,
+        agentPayouts,
+        staffPayouts,
+        advances,
+        totalSalary,
+        paidSalary,
+        pendingSalary: totalSalary - paidSalary,
+        period: `${from} to ${to}`,
       })
-
-      if (!response.ok) throw new Error("Failed to fetch reports")
-
-      const data = await response.json()
-      setAgentReport(data.agent_report)
-      setPayrollReport(data.payroll_report)
-      setTotals(data.totals)
-    } catch (error) {
-      console.error("Error:", error)
+    } catch (e) {
+      console.error(e)
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
   return (
-    <MainLayout title="Reports & Analytics" subtitle="Business intelligence dashboard" shopId={shopId}>
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold">Reports</h1>
+
+      <Card className="p-4">
+        <div className="flex gap-2 items-end flex-wrap">
+          <div>
+            <label className="block text-xs font-medium mb-1">From</label>
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1">To</label>
+            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          </div>
+          <Button onClick={generateReport} disabled={loading}>
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            Generate Report
+          </Button>
         </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <StatCard
-              label="Total Sales"
-              value={`₹${totals.sales.toLocaleString()}`}
-              icon={<TrendingUp />}
-              variant="primary"
-            />
-            <StatCard
-              label="Commission Paid"
-              value={`₹${totals.commission.toLocaleString()}`}
-              icon={<DollarSign />}
-              variant="secondary"
-            />
-            <StatCard
-              label="Total Payroll"
-              value={`₹${totals.payroll.toLocaleString()}`}
-              icon={<Users />}
-              variant="accent"
-            />
-          </div>
+      </Card>
 
-          <div className="grid lg:grid-cols-2 gap-6">
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Agent Commission Performance</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={agentReport}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="agent_name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="total_sales" fill="var(--color-primary)" name="Sales" />
-                  <Bar dataKey="commission" fill="var(--color-accent)" name="Commission" />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Monthly Payroll Trend</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={payrollReport}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="total_paid" stroke="var(--color-primary)" name="Payroll" />
-                </LineChart>
-              </ResponsiveContainer>
-            </Card>
-          </div>
-        </>
+      {reportData && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card className="p-4">
+            <p className="text-sm text-muted-foreground">Total Sales</p>
+            <p className="text-2xl font-bold">₹{reportData.totalSales.toLocaleString()}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-sm text-muted-foreground">Total Commission</p>
+            <p className="text-2xl font-bold text-green-600">₹{reportData.totalCommission.toLocaleString()}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-sm text-muted-foreground">Total Payouts</p>
+            <p className="text-2xl font-bold">₹{reportData.totalPayouts.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">Agents: ₹{reportData.agentPayouts.toLocaleString()} | Staff: ₹{reportData.staffPayouts.toLocaleString()}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-sm text-muted-foreground">Advances</p>
+            <p className="text-2xl font-bold text-amber-600">₹{reportData.advances.toLocaleString()}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-sm text-muted-foreground">Total Salary</p>
+            <p className="text-2xl font-bold">₹{reportData.totalSalary.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">Paid: ₹{reportData.paidSalary.toLocaleString()} | Pending: ₹{reportData.pendingSalary.toLocaleString()}</p>
+          </Card>
+        </div>
       )}
-    </MainLayout>
+    </div>
   )
 }

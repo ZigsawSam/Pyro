@@ -5,8 +5,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Receipt, QrCode, Wallet, CheckCircle2 } from "lucide-react"
+import { Loader2, QrCode, Wallet, CheckCircle2 } from "lucide-react"
 import QRCode from "qrcode"
+import { createClient } from "@/lib/supabase/client"
 
 interface PayrollPaymentDialogProps {
   open: boolean
@@ -17,6 +18,7 @@ interface PayrollPaymentDialogProps {
 }
 
 export function PayrollPaymentDialog({ open, onOpenChange, shopId, salary, onPaid }: PayrollPaymentDialogProps) {
+  const supabase = createClient()
   const [isLoading, setIsLoading] = useState(false)
   const [paymentMode, setPaymentMode] = useState<"full" | "custom" | null>(null)
   const [customAmount, setCustomAmount] = useState("")
@@ -117,13 +119,17 @@ export function PayrollPaymentDialog({ open, onOpenChange, shopId, salary, onPai
     if (!salary || !paymentAmount) return
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/shops/${shopId}/salary/${salary.id}/mark-paid`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-      if (!response.ok) throw new Error("Failed to confirm payment")
+      const { error } = await supabase
+        .from("salary")
+        .update({
+          status: "paid",
+          paid_at: new Date().toISOString(),
+        })
+        .eq("id", salary.id)
+        .eq("shop_id", shopId)
+
+      if (error) throw error
+
       setPaymentCompleted(true)
       onPaid()
       reset()

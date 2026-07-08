@@ -1,127 +1,169 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
-import { MainLayout } from "@/components/layout/main-layout"
-import { StatCard } from "@/components/stat-card"
-import { Card } from "@/components/ui/card"
-import { Users, TrendingUp, Clock, UserCheck } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Loader2, Users, DollarSign, TrendingUp, Calendar } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
-interface DashboardData {
-  total_sales: number
-  pending_commission: number
-  paid_commission: number
-  total_staff: number
-  pending_salary: number
-  attendance_today: number
-}
-
-export default function ShopDashboardPage() {
-  const params = useParams()
-  const shopId = params.shopId as string
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [shopName, setShopName] = useState("")
-  const [isLoading, setIsLoading] = useState(true)
-  const [isMounted, setIsMounted] = useState(false)
+export default function ShopDashboardPage({ params }: { params: { shopId: string } }) {
+  const router = useRouter()
+  const supabase = createClient()
+  const shopId = Number(params.shopId)
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    totalAgents: 0,
+    totalStaff: 0,
+    todaySales: 0,
+    monthSales: 0,
+    pendingPayouts: 0,
+    pendingSalary: 0,
+  })
 
   useEffect(() => {
-    setIsMounted(true)
-  }, [])
+    fetchDashboardData()
+  }, [shopId])
 
-  useEffect(() => {
-    if (!isMounted) return
+  const fetchDashboardData = async () => {
+    setLoading(true)
+    try {
+      const today = new Date().toISOString().split("T")[0]
+      const monthStart = `${new Date().toISOString().slice(0, 7)}-01`
 
-    const fetchDashboard = async () => {
-      try {
-        const response = await fetch(`/api/shops/${shopId}/dashboard`)
+      // Get agent count
+      const { count: agentCount } = await supabase
+        .from("shop_agents")
+        .select("*", { count: "exact", head: true })
+        .eq("shop_id", shopId)
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.error || "Failed to fetch dashboard")
-        }
+      // Get staff count
+      const { count: staffCount } = await supabase
+        .from("staff")
+        .select("*", { count: "exact", head: true })
+        .eq("shop_id", shopId)
 
-        const result = await response.json()
-        setData(result.data || {
-          total_sales: 0,
-          pending_commission: 0,
-          paid_commission: 0,
-          total_staff: 0,
-          pending_salary: 0,
-          attendance_today: 0,
-        })
-        setShopName(result.shopName || "Shop Dashboard")
-      } catch (error) {
-        setData({
-          total_sales: 0,
-          pending_commission: 0,
-          paid_commission: 0,
-          total_staff: 0,
-          pending_salary: 0,
-          attendance_today: 0,
-        })
-      } finally {
-        setIsLoading(false)
-      }
+      // Get today's sales
+      const { data: todaySalesData } = await supabase
+        .from("sales")
+        .select("amount")
+        .eq("shop_id", shopId)
+        .eq("sale_date", today)
+
+      const todaySales = (todaySalesData || []).reduce((sum, s) => sum + Number(s.amount || 0), 0)
+
+      // Get month sales
+      const { data: monthSalesData } = await supabase
+        .from("sales")
+        .select("amount")
+        .eq("shop_id", shopId)
+        .gte("sale_date", monthStart)
+
+      const monthSales = (monthSalesData || []).reduce((sum, s) => sum + Number(s.amount || 0), 0)
+
+      // Get pending payouts
+      const { data: payoutsData } = await supabase
+        .from("payouts")
+        .select("amount_paid")
+        .eq("shop_id", shopId)
+        .eq("is_advance", false)
+
+      // Get pending salary
+      const { data: salaryData } = await supabase
+        .from("salary")
+        .select("final_payable")
+        .eq("shop_id", shopId)
+        .eq("status", "pending")
+
+      const pendingSalary = (salaryData || []).reduce((sum, s) => sum + Number(s.final_payable || 0), 0)
+
+      setStats({
+        totalAgents: agentCount || 0,
+        totalStaff: staffCount || 0,
+        todaySales,
+        monthSales,
+        pendingPayouts: (payoutsData || []).reduce((sum, p) => sum + Number(p.amount_paid || 0), 0),
+        pendingSalary,
+      })
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    fetchDashboard()
-  }, [shopId, isMounted])
-
-  if (!isMounted || isLoading) {
+  if (loading) {
     return (
-      <MainLayout title="Dashboard" shopId={Number(shopId)}>
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-        </div>
-      </MainLayout>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
     )
   }
 
   return (
-    <MainLayout
-      title="Dashboard"
-      subtitle="Welcome back to your shop dashboard"
-      shopId={Number(shopId)}
-      shopName={shopName}
-    >
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <StatCard
-          label="Total Sales"
-          value={`₹${(data?.total_sales || 0).toLocaleString()}`}
-          variant="primary"
-          icon={<TrendingUp size={24} />}
-        />
-        <StatCard
-          label="Pending Commission"
-          value={`₹${(data?.pending_commission || 0).toLocaleString()}`}
-          variant="secondary"
-          icon={<Clock size={24} />}
-        />
-        <StatCard
-          label="Paid Commission"
-          value={`₹${(data?.paid_commission || 0).toLocaleString()}`}
-          variant="accent"
-          icon={<TrendingUp size={24} />}
-        />
-        <StatCard label="Total Staff" value={data?.total_staff || 0} variant="primary" icon={<Users size={24} />} />
-        <StatCard
-          label="Pending Salary"
-          value={`₹${(data?.pending_salary || 0).toLocaleString()}`}
-          variant="secondary"
-          icon={<Clock size={24} />}
-        />
-        <StatCard
-          label="Present Today"
-          value={data?.attendance_today || 0}
-          variant="accent"
-          icon={<UserCheck size={24} />}
-        />
-      </div>
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold">Dashboard</h1>
+      
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalAgents}</div>
+          </CardContent>
+        </Card>
 
-      <Card className="p-6">
-        <h2 className="text-xl font-bold text-foreground mb-4">Recent Activity</h2>
-        <p className="text-muted-foreground">Activity feed coming soon</p>
-      </Card>
-    </MainLayout>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Staff</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalStaff}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Today's Sales</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{stats.todaySales.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">This Month</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{stats.monthSales.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Pending Payouts</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{stats.pendingPayouts.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Pending Salary</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{stats.pendingSalary.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   )
 }

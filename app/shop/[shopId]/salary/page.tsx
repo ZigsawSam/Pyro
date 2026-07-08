@@ -1,99 +1,236 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
-import { MainLayout } from "@/components/layout/main-layout"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Loader2, CreditCard, CheckCircle2 } from "lucide-react"
-import { format } from "date-fns"
-import { PayrollPaymentDialog } from "@/components/payroll/payroll-payment-dialog"
+import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
+import { Loader2, Plus, CheckCircle } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
-interface Salary {
+interface SalaryRecord {
   id: number
   staff_id: number
   staff_name: string
+  month: string
   present_days: number
   base_salary: number
   advances: number
   final_payable: number
   status: string
-  account_name?: string
-  account_number?: string
-  bank_name?: string
-  ifsc_code?: string
-  upi_id?: string
+  paid_at: string | null
 }
 
-export default function SalaryPage() {
-  const params = useParams()
-  const shopId = Number(params.shopId as string)
-  const [salaries, setSalaries] = useState<Salary[]>([])
-  const [month, setMonth] = useState(format(new Date(), "yyyy-MM"))
-  const [isLoading, setIsLoading] = useState(true)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [selectedSalary, setSelectedSalary] = useState<Salary | null>(null)
-  const [showPayDialog, setShowPayDialog] = useState(false)
+export default function ShopSalaryPage({ params }: { params: { shopId: string } }) {
+  const supabase = createClient()
+  const shopId = Number(params.shopId)
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [salaryRecords, setSalaryRecords] = useState<SalaryRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
 
-  useEffect(() => { fetchSalaries() }, [shopId, month])
+  useEffect(() => {
+    fetchSalary()
+  }, [shopId, month])
 
-  const fetchSalaries = async () => {
+  const fetchSalary = async () => {
+    setLoading(true)
     try {
-      const response = await fetch(`/api/shops/${shopId}/salary?month=${month}`)
-      if (!response.ok) throw new Error("Failed to fetch salaries")
-      const data = await response.json()
-      setSalaries(data.salaries || [])
-    } catch (error) { console.error("Error:", error) } finally { setIsLoading(false) }
+      const { data, error } = await supabase
+        .from("salary")
+        .select("*, staff:staff_id(name)")
+        .eq("shop_id", shopId)
+        .eq("month", month)
+        .order("staff_id")
+
+      if (error) throw error
+
+      const formatted = (data || []).map((s: any) => ({
+        id: s.id,
+        staff_id: s.staff_id,
+        staff_name: s.staff?.name || "Unknown",
+        month: s.month,
+        present_days: s.present_days,
+        base_salary: s.base_salary,
+        advances: s.advances,
+        final_payable: s.final_payable,
+        status: s.status,
+        paid_at: s.paid_at,
+      }))
+
+      setSalaryRecords(formatted)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleGenerateSalary = async () => {
-    setIsGenerating(true)
+  const handleGenerate = async () => {
+    setGenerating(true)
     try {
-      const response = await fetch(`/api/shops/${shopId}/salary/generate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ month: `${month}-01` }) })
-      if (!response.ok) throw new Error("Failed to generate salary")
-      fetchSalaries()
-    } catch (error) { console.error("Error:", error) } finally { setIsGenerating(false) }
+      // Get all staff
+      const { data: staffData } = await supabase
+        .from("staff")
+        .select("id, base_salary, salary_type")
+        .eq("shop_id", shopId)
+
+      if (!staffData || staffData.length === 0) {
+        alert("No staff found")
+        return
+      }
+
+      // Get attendance for the month
+      const monthStart = `${month}-01`
+      const monthEnd = `${month}-31`
+
+      const { data: attendanceData } = await supabase
+        .from("attendance")
+        .select("staff_id, status, work_hours")
+        .eq("shop_id", shopId)
+        .gte("attendance_date", monthStart)
+        .lte("attendance_date", monthEnd)
+
+      // Get advances for the month
+      const { data: advancesData } = await supabase
+        .from("payouts")
+        .select("person_id, amount_paid")
+        .eq("shop_id", shopId)
+        .eq("person_type", "staff")
+        .eq("is_advance", true)
+        .gte("payment_date", monthStart)
+        .lte("payment_date", monthEnd)
+
+      const attendanceByStaff = (attendanceData || []).reduce((acc: any, a: any) => {
+        if (!acc[a.staff_id]) acc[a.staff_id] = { present: 0, hours: 0 }
+        if (a.status === "present") acc[a.staff_id].present += 1
+        if (a.status === "half") acc[a.staff_id].present += 0.5
+        acc[a.staff_id].hours += Number(a.work_hours || 0)
+        return acc
+      }, {})
+
+      const advancesByStaff = (advancesData || []).reduce((acc: any, a: any) => {
+        acc[a.person_id] = (acc[a.person_id] || 0) + Number(a.amount_paid || 0)
+        return acc
+      }, {})
+
+      const salaryRecords = staffData.map((s: any) => {
+        const presentDays = attendanceByStaff[s.id]?.present || 0
+        const workHours = attendanceByStaff[s.id]?.hours || 0
+        const advances = advancesByStaff[s.id] || 0
+
+        let finalPayable = 0
+        if (s.salary_type === "monthly") {
+          finalPayable = Number(s.base_salary || 0) - advances
+        } else if (s.salary_type === "daily") {
+          finalPayable = (Number(s.base_salary || 0) * presentDays) - advances
+        } else if (s.salary_type === "hourly") {
+          finalPayable = (Number(s.base_salary || 0) * workHours) - advances
+        }
+
+        return {
+          shop_id: shopId,
+          staff_id: s.id,
+          month,
+          present_days: Math.floor(presentDays),
+          base_salary: s.base_salary,
+          advances,
+          final_payable: Math.max(0, finalPayable),
+          status: "pending",
+        }
+      })
+
+      // Upsert salary records
+      const { error } = await supabase
+        .from("salary")
+        .upsert(salaryRecords, { onConflict: "shop_id,staff_id,month" })
+
+      if (error) throw error
+
+      fetchSalary()
+    } catch (e) {
+      console.error(e)
+      alert("Failed to generate salary")
+    } finally {
+      setGenerating(false)
+    }
   }
 
-  const openPay = (salary: Salary) => { setSelectedSalary(salary); setShowPayDialog(true) }
+  const handleMarkPaid = async (salaryId: number) => {
+    try {
+      const { error } = await supabase
+        .from("salary")
+        .update({ status: "paid", paid_at: new Date().toISOString() })
+        .eq("id", salaryId)
+        .eq("shop_id", shopId)
+
+      if (error) throw error
+      fetchSalary()
+    } catch (e) {
+      console.error(e)
+      alert("Failed to mark as paid")
+    }
+  }
 
   return (
-    <MainLayout title="Salary" subtitle="Manage staff salaries and payments" shopId={shopId}>
-      <div className="mb-6 flex flex-wrap gap-4 items-end justify-between">
-        <div>
-          <label className="block text-sm font-medium mb-1">Month</label>
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded border border-border bg-card px-3 py-2" />
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Salary</h1>
+        <div className="flex gap-2">
+          <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-auto" />
+          <Button onClick={handleGenerate} disabled={generating}>
+            {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+            Generate
+          </Button>
         </div>
-        <Button onClick={handleGenerateSalary} disabled={isGenerating} className="gap-2">{isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus size={18} />}Generate Salary</Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {salaries.map((salary) => {
-          const isCleared = salary.status === "paid"
-          return (
-            <Card key={salary.id} className="p-5 transition hover:shadow-lg">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold">{salary.staff_name}</h3>
-                    {isCleared ? <CheckCircle2 className="h-5 w-5 text-green-600" /> : null}
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">Present days: {salary.present_days}</p>
-                </div>
-                <span className={`rounded px-2 py-1 text-xs font-semibold ${salary.status === "paid" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>{salary.status}</span>
-              </div>
-              <div className="mt-4 space-y-2 text-sm">
-                <div className="flex items-center justify-between"><span className="text-muted-foreground">Base Salary</span><span className="font-medium">₹{Number(salary.base_salary || 0).toLocaleString()}</span></div>
-                <div className="flex items-center justify-between"><span className="text-muted-foreground">Advances</span><span className="font-medium">₹{Number(salary.advances || 0).toLocaleString()}</span></div>
-                <div className="flex items-center justify-between"><span className="text-muted-foreground">Payable</span><span className="font-medium">₹{Number(salary.final_payable || 0).toLocaleString()}</span></div>
-              </div>
-              <Button variant="ghost" className="mt-4 w-full justify-start gap-2" onClick={() => openPay(salary)}><CreditCard className="h-4 w-4" />Process Payment</Button>
-            </Card>
-          )
-        })}
-      </div>
-
-      <PayrollPaymentDialog open={showPayDialog} onOpenChange={setShowPayDialog} shopId={shopId} salary={selectedSalary} onPaid={fetchSalaries} />
-    </MainLayout>
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left">
+                <th className="pb-2">Staff</th>
+                <th className="pb-2">Present Days</th>
+                <th className="pb-2 text-right">Base Salary</th>
+                <th className="pb-2 text-right">Advances</th>
+                <th className="pb-2 text-right">Final Payable</th>
+                <th className="pb-2">Status</th>
+                <th className="pb-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {salaryRecords.map((record) => (
+                <tr key={record.id} className="border-b">
+                  <td className="py-2">{record.staff_name}</td>
+                  <td className="py-2">{record.present_days}</td>
+                  <td className="py-2 text-right">₹{Number(record.base_salary).toLocaleString()}</td>
+                  <td className="py-2 text-right text-red-600">₹{Number(record.advances).toLocaleString()}</td>
+                  <td className="py-2 text-right font-bold">₹{Number(record.final_payable).toLocaleString()}</td>
+                  <td className="py-2">
+                    <span className={`text-xs px-2 py-1 rounded ${record.status === "paid" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                      {record.status}
+                    </span>
+                  </td>
+                  <td className="py-2">
+                    {record.status === "pending" && (
+                      <Button size="sm" onClick={() => handleMarkPaid(record.id)}>
+                        <CheckCircle className="h-4 w-4 mr-1" /> Mark Paid
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {salaryRecords.length === 0 && (
+                <tr><td colSpan={7} className="text-center text-muted-foreground py-8">No salary records. Click Generate to create.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   )
 }

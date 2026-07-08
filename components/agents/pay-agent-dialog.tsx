@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Receipt, QrCode, Wallet } from "lucide-react"
 import QRCode from "qrcode"
+import { createClient } from "@/lib/supabase/client"
 
 interface PayAgentDialogProps {
   open: boolean
@@ -17,6 +18,7 @@ interface PayAgentDialogProps {
 }
 
 export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: PayAgentDialogProps) {
+  const supabase = createClient()
   const [isLoading, setIsLoading] = useState(false)
   const [sales, setSales] = useState<any[]>([])
   const [showStatement, setShowStatement] = useState(false)
@@ -35,11 +37,14 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
     const fetchSales = async () => {
       setIsLoading(true)
       try {
-        const response = await fetch(`/api/shops/${shopId}/sales`)
-        if (!response.ok) throw new Error("Failed to load sales")
-        const data = await response.json()
-        const agentSales = (data.sales || []).filter((sale: any) => sale.agent_id === agent.id)
-        setSales(agentSales)
+        const { data, error } = await supabase
+          .from("sales")
+          .select("*")
+          .eq("shop_id", shopId)
+          .eq("agent_id", agent.id)
+
+        if (error) throw error
+        setSales(data || [])
       } catch (error) {
         console.error(error)
       } finally {
@@ -48,7 +53,7 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
     }
 
     fetchSales()
-  }, [open, agent, shopId])
+  }, [open, agent, shopId, supabase])
 
   const pendingAmount = useMemo(() => Number(agent?.pending_commission || 0), [agent])
 
@@ -139,20 +144,17 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
 
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/shops/${shopId}/payouts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          person_type: "agent",
-          person_id: agent.id,
-          amount_paid: paymentAmount,
-          remarks: paymentMode === "full" ? "Full payout via QR" : `Custom payout via QR (${paymentAmount})`,
-        }),
+      const { error } = await supabase.from("payouts").insert({
+        shop_id: shopId,
+        person_type: "agent",
+        person_id: agent.id,
+        amount_paid: paymentAmount,
+        payment_date: new Date().toISOString().split("T")[0],
+        remarks: paymentMode === "full" ? "Full payout via QR" : `Custom payout via QR (${paymentAmount})`,
+        is_advance: false,
       })
 
-      if (!response.ok) throw new Error("Failed to create payout")
+      if (error) throw error
 
       setPaymentCompleted(true)
       onPaid()

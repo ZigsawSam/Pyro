@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Receipt, QrCode, Wallet } from "lucide-react"
 import QRCode from "qrcode"
+import { createClient } from "@/lib/supabase/client"
 
 interface PayStaffDialogProps {
   open: boolean
@@ -17,6 +18,7 @@ interface PayStaffDialogProps {
 }
 
 export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: PayStaffDialogProps) {
+  const supabase = createClient()
   const [isLoading, setIsLoading] = useState(false)
   const [sales, setSales] = useState<any[]>([])
   const [showStatement, setShowStatement] = useState(false)
@@ -36,11 +38,13 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
     const fetchSales = async () => {
       setIsLoading(true)
       try {
-        const response = await fetch(`/api/shops/${shopId}/sales`)
-        if (!response.ok) throw new Error("Failed to load sales")
-        const data = await response.json()
-        const staffSales = (data.sales || []).filter((sale: any) => sale.staff_id === staff.id)
-        setSales(staffSales)
+        const { data, error } = await supabase
+          .from("sales")
+          .select("*")
+          .eq("shop_id", shopId)
+
+        if (error) throw error
+        setSales(data || [])
       } catch (error) {
         console.error(error)
       } finally {
@@ -49,7 +53,7 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
     }
 
     fetchSales()
-  }, [open, staff, shopId])
+  }, [open, staff, shopId, supabase])
 
   const pendingAmount = useMemo(() => Number(staff?.pending_payroll || 0), [staff])
 
@@ -142,28 +146,17 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
     setIsLoading(true)
     setErrorMsg(null)
     try {
-      const response = await fetch(`/api/shops/${shopId}/payouts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          person_type: "staff",
-          person_id: staff.id,
-          amount_paid: paymentAmount,
-          remarks: paymentMode === "full" ? "Full payout via QR" : `Custom payout via QR (${paymentAmount})`,
-        }),
+      const { error } = await supabase.from("payouts").insert({
+        shop_id: shopId,
+        person_type: "staff",
+        person_id: staff.id,
+        amount_paid: paymentAmount,
+        payment_date: new Date().toISOString().split("T")[0],
+        remarks: paymentMode === "full" ? "Full payout via QR" : `Custom payout via QR (${paymentAmount})`,
+        is_advance: false,
       })
 
-      if (!response.ok) {
-        const text = await response.text()
-        let errData: any = {}
-        try { errData = JSON.parse(text) } catch { /* not JSON */ }
-        console.error("API Error:", response.status, text, errData)
-        throw new Error(
-          errData.details || errData.error || text || `Failed to create payout: ${response.status}`
-        )
-      }
+      if (error) throw error
 
       setPaymentCompleted(true)
       onPaid()

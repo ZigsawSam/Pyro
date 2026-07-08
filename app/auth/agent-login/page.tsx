@@ -3,6 +3,7 @@
 import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +11,9 @@ import { Loader2, AlertCircle } from "lucide-react"
 
 export default function AgentLoginPage() {
   const router = useRouter()
+  const supabase = createClient()
   const [phoneNumber, setPhoneNumber] = useState("")
+  const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
@@ -26,54 +29,33 @@ export default function AgentLoginPage() {
         return
       }
 
-      let response: Response
-      try {
-        response = await fetch("/api/auth/agent-login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone_number: phoneNumber }),
-        })
-      } catch (networkError) {
-        setError("Network error - cannot connect to server")
+      // Agents use phone@agent.local as email
+      const agentEmail = `${phoneNumber}@agent.local`
+
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: agentEmail,
+        password: password || phoneNumber, // fallback to phone if no password set
+      })
+
+      if (authError || !data.user) {
+        setError(authError?.message || "Invalid phone number or password")
         setIsLoading(false)
         return
       }
 
-      // Check content type before parsing JSON
-      const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text()
-        console.error("Non-JSON response:", text.slice(0, 200))
-        setError(`Server returned HTML instead of JSON (status ${response.status}). Check console.`)
+      // Verify agent profile exists
+      const { data: agent, error: agentError } = await supabase
+        .from("agents")
+        .select("id")
+        .eq("user_id", data.user.id)
+        .single()
+
+      if (agentError || !agent) {
+        setError("Agent profile not found. Please register first.")
         setIsLoading(false)
         return
       }
 
-      let data: any
-      try {
-        data = await response.json()
-      } catch (parseError) {
-        setError("Server returned invalid JSON")
-        setIsLoading(false)
-        return
-      }
-
-      if (!response.ok) {
-        setError(data.error || `Login failed (${response.status})`)
-        setIsLoading(false)
-        return
-      }
-
-      if (!data.agent || !data.agent.id) {
-        setError("Invalid login response from server")
-        setIsLoading(false)
-        return
-      }
-
-      // Store session
-      localStorage.setItem("agent_session", JSON.stringify(data.agent))
-      localStorage.setItem("agent_token", data.token || "")
-      
       router.push("/agent/dashboard")
     } catch (err) {
       console.error("Login exception:", err)
@@ -110,6 +92,16 @@ export default function AgentLoginPage() {
             />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Password</label>
+            <Input
+              type="password"
+              placeholder="Enter password (or leave blank to use phone)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? (
               <>
@@ -122,7 +114,9 @@ export default function AgentLoginPage() {
           </Button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-muted-foreground">Demo phone: 9876543210</div>
+        <div className="mt-6 text-center text-sm text-muted-foreground">
+          New agent? <a href="/auth/agent-register" className="text-primary hover:underline">Register here</a>
+        </div>
       </Card>
     </div>
   )
