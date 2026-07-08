@@ -46,6 +46,7 @@ export default function AgentsPage() {
   const params = useParams()
   const rawShopId = Array.isArray(params.shopId) ? params.shopId[0] : params.shopId
   const shopId = Number(rawShopId)
+  const supabase = createClient()
   const [agents, setAgents] = useState<ShopAgent[]>([])
   const [requests, setRequests] = useState<AgentRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -69,10 +70,65 @@ export default function AgentsPage() {
 
   const fetchAgents = async () => {
     try {
-      const response = await fetch(`/api/shops/${shopId}/agents`)
-      if (!response.ok) throw new Error("Failed to fetch agents")
-      const data = await response.json()
-      setAgents(data.agents || [])
+      // Fetch shop_agents with agent details
+      const { data: shopAgentsData, error: shopAgentsError } = await supabase
+        .from("shop_agents")
+        .select("id, agent_id, commission_rate, agents:agent_id(id, name, phone_number, description, account_name, account_number, bank_name, ifsc_code, upi_id)")
+        .eq("shop_id", shopId)
+
+      if (shopAgentsError) throw shopAgentsError
+
+      // Fetch all sales for this shop to calculate totals
+      const { data: salesData } = await supabase
+        .from("sales")
+        .select("agent_id, amount, commission_amount")
+        .eq("shop_id", shopId)
+
+      // Fetch all payouts for this shop
+      const { data: payoutsData } = await supabase
+        .from("payouts")
+        .select("person_id, amount_paid")
+        .eq("shop_id", shopId)
+        .eq("person_type", "agent")
+
+      const salesByAgent: Record<number, { total_sales: number; total_commission: number }> = {}
+      ;(salesData || []).forEach((sale: any) => {
+        if (!salesByAgent[sale.agent_id]) {
+          salesByAgent[sale.agent_id] = { total_sales: 0, total_commission: 0 }
+        }
+        salesByAgent[sale.agent_id].total_sales += Number(sale.amount || 0)
+        salesByAgent[sale.agent_id].total_commission += Number(sale.commission_amount || 0)
+      })
+
+      const paidByAgent: Record<number, number> = {}
+      ;(payoutsData || []).forEach((p: any) => {
+        paidByAgent[p.person_id] = (paidByAgent[p.person_id] || 0) + Number(p.amount_paid || 0)
+      })
+
+      const formattedAgents: ShopAgent[] = (shopAgentsData || []).map((link: any) => {
+        const agent = link.agents || {}
+        const stats = salesByAgent[link.agent_id] || { total_sales: 0, total_commission: 0 }
+        const paid = paidByAgent[link.agent_id] || 0
+        return {
+          link_id: link.id,
+          id: link.agent_id,
+          name: agent.name || "Unknown",
+          phone_number: agent.phone_number || "",
+          description: agent.description || "",
+          commission_rate: link.commission_rate || 0,
+          total_sales: stats.total_sales,
+          total_commission: stats.total_commission,
+          pending_commission: stats.total_commission - paid,
+          paid_commission: paid,
+          account_name: agent.account_name,
+          account_number: agent.account_number,
+          bank_name: agent.bank_name,
+          ifsc_code: agent.ifsc_code,
+          upi_id: agent.upi_id,
+        }
+      })
+
+      setAgents(formattedAgents)
     } catch (error) {
       console.error("Error fetching agents:", error)
     } finally {
@@ -82,9 +138,14 @@ export default function AgentsPage() {
 
   const fetchRequests = async () => {
     try {
-      const res = await fetch(`/api/shops/${shopId}/agent-requests`)
-      const data = await res.json()
-      setRequests(data.requests || [])
+      const { data, error } = await supabase
+        .from("agent_requests")
+        .select("*")
+        .eq("shop_id", shopId)
+        .order("requested_at", { ascending: false })
+
+      if (error) throw error
+      setRequests(data || [])
     } catch (e) { console.error(e) }
   }
 
@@ -98,15 +159,23 @@ export default function AgentsPage() {
     if (!existingPhone) return
     setSearchingExisting(true)
     try {
-      const res = await fetch(`/api/agents/lookup?phone=${encodeURIComponent(existingPhone)}`)
-      const data = await res.json()
-      if (data.agent) {
-        setExistingAgentData(data.agent)
+      const { data: agents, error } = await supabase
+        .from("agents")
+        .select("id, name, phone_number, description, upi_id")
+        .eq("phone_number", existingPhone)
+        .limit(1)
+
+      if (error) throw error
+
+      if (agents && agents.length > 0) {
+        setExistingAgentData(agents[0])
       } else {
         alert("No agent found with this phone number")
         setExistingAgentData(null)
       }
-    } catch (e) { alert("Search failed") }
+    } catch (e) { 
+      alert("Search failed") 
+    }
     finally { setSearchingExisting(false) }
   }
 
@@ -114,16 +183,22 @@ export default function AgentsPage() {
     if (!existingAgentData || !existingRate) return
     setSendingRequest(true)
     try {
-      const res = await fetch(`/api/shops/${shopId}/agents/invite`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone_number: existingPhone,
+      // Create an agent_request entry
+      const { error } = await supabase
+        .from("agent_requests")
+        .insert({
+          shop_id: shopId,
+          agent_id: existingAgentData.id,
+          agent_name: existingAgentData.name,
+          agent_phone: existingAgentData.phone_number,
           commission_rate: Number(existingRate),
           message: existingMessage,
+          status: "pending",
+          requested_by: "shop",
         })
-      })
-      if (!res.ok) throw new Error("Failed")
+
+      if (error) throw error
+
       setShowExistingDialog(false)
       setExistingPhone("")
       setExistingRate("")

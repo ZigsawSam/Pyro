@@ -7,6 +7,7 @@ import { DataTable } from "@/components/data-table"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 interface Commission {
   sale_id: number
@@ -17,16 +18,10 @@ interface Commission {
   paid: boolean
 }
 
-interface AgentData {
-  id: number
-  uniqueId: string
-  name: string
-  phoneNumber: string
-}
-
 function CommissionsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const supabase = createClient()
   const shopId = searchParams.get("shop_id")
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [shopName, setShopName] = useState("")
@@ -38,45 +33,74 @@ function CommissionsContent() {
 
     const fetchCommissions = async () => {
       try {
-        const agentSession = localStorage.getItem("agent_session")
-        if (!agentSession) {
+        // Get current agent user
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
           router.push("/auth/agent-login")
           return
         }
 
-        let agent: AgentData
-        try {
-          agent = JSON.parse(agentSession)
-          if (!agent || !agent.id) throw new Error("Invalid agent session data")
-        } catch (parseErr) {
-          console.error("[v0] Parse error:", parseErr)
-          localStorage.removeItem("agent_session")
-          localStorage.removeItem("agent_token")
+        // Get agent profile
+        const { data: agent } = await supabase
+          .from("agents")
+          .select("id")
+          .eq("user_id", user.id)
+          .single()
+
+        if (!agent) {
           router.push("/auth/agent-login")
           return
         }
 
-        const response = await fetch(`/api/agents/${agent.id}/commissions?shop_id=${shopId}`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("agent_token")}`,
-          },
-        })
+        // Fetch sales with commission for this agent + shop
+        const { data: salesData, error: salesError } = await supabase
+          .from("sales")
+          .select("id, amount, commission_amount, sale_date, shops:shop_id(shop_name)")
+          .eq("agent_id", agent.id)
+          .eq("shop_id", Number(shopId))
+          .order("sale_date", { ascending: false })
 
-        if (!response.ok) throw new Error("Failed to fetch commissions")
+        if (salesError) throw salesError
 
-        const data = await response.json()
-        setCommissions(data.commissions)
-        setShopName(data.shop_name)
-      } catch (error) {
+        // Fetch payouts to determine paid status
+        const { data: payoutsData } = await supabase
+          .from("payouts")
+          .select("id")
+          .eq("shop_id", Number(shopId))
+          .eq("person_id", agent.id)
+          .eq("person_type", "agent")
+
+        const paidSaleIds = new Set((payoutsData || []).map((p: any) => p.id))
+
+        const formattedCommissions: Commission[] = (salesData || []).map((sale: any) => ({
+          sale_id: sale.id,
+          shop_name: sale.shops?.shop_name || "Unknown Shop",
+          amount: Number(sale.amount || 0),
+          commission_amount: Number(sale.commission_amount || 0),
+          sale_date: sale.sale_date,
+          paid: paidSaleIds.has(sale.id),
+        }))
+
+        setCommissions(formattedCommissions)
+        
+        // Get shop name
+        const { data: shopData } = await supabase
+          .from("shops")
+          .select("shop_name")
+          .eq("id", Number(shopId))
+          .single()
+        
+        setShopName(shopData?.shop_name || "")
+      } catch (error: any) {
         console.error("Error:", error)
-        setError("Failed to load commissions. Please try again.")
+        setError(error.message || "Failed to load commissions. Please try again.")
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchCommissions()
-  }, [shopId, router])
+  }, [shopId, router, supabase])
 
   const columns = [
     {

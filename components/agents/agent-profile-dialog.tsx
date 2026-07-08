@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loader2, Pencil, Trash2, Wallet, CheckCircle2 } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 interface AgentProfileDialogProps {
   open: boolean
@@ -16,6 +17,7 @@ interface AgentProfileDialogProps {
 }
 
 export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdated, onDeleted }: AgentProfileDialogProps) {
+  const supabase = createClient()
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -52,13 +54,17 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
   const fetchAdvances = async () => {
     if (!agent) return
     try {
-      const response = await fetch(`/api/shops/${shopId}/payouts`)
-      if (!response.ok) return
-      const data = await response.json()
-      const agentAdvances = (data.payouts || []).filter(
-        (p: any) => p.agent_id === agent.id && p.is_advance
-      )
-      setAdvances(agentAdvances)
+      const { data, error } = await supabase
+        .from("payouts")
+        .select("*")
+        .eq("shop_id", shopId)
+        .eq("person_id", agent.id)
+        .eq("person_type", "agent")
+        .eq("is_advance", true)
+        .order("payment_date", { ascending: false })
+
+      if (error) throw error
+      setAdvances(data || [])
     } catch (error) {
       console.error(error)
     }
@@ -68,24 +74,32 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
     if (!agent) return
     setIsSaving(true)
     try {
-      const response = await fetch(`/api/shops/${shopId}/agents/${agent.link_id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // Update agent profile
+      const { error: agentError } = await supabase
+        .from("agents")
+        .update({
           name: formData.name,
           phone_number: formData.phone_number,
           description: formData.description,
-          commission_rate: Number.parseFloat(formData.commission_rate),
           account_name: formData.account_name,
           account_number: formData.account_number,
           bank_name: formData.bank_name,
           ifsc_code: formData.ifsc_code,
           upi_id: formData.upi_id,
-        }),
-      })
-      if (!response.ok) throw new Error("Failed to update agent")
+        })
+        .eq("id", agent.id)
+
+      if (agentError) throw agentError
+
+      // Update commission rate in shop_agents
+      const { error: linkError } = await supabase
+        .from("shop_agents")
+        .update({ commission_rate: Number.parseFloat(formData.commission_rate) })
+        .eq("id", agent.link_id)
+        .eq("shop_id", shopId)
+
+      if (linkError) throw linkError
+
       onUpdated()
       onOpenChange(false)
     } catch (error) {
@@ -100,10 +114,14 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
     if (!window.confirm("Remove this agent from this shop and keep their sales history intact?")) return
     setIsDeleting(true)
     try {
-      const response = await fetch(`/api/shops/${shopId}/agents/${agent.link_id}`, {
-        method: "DELETE",
-      })
-      if (!response.ok) throw new Error("Failed to remove agent")
+      // Delete shop_agent link
+      const { error } = await supabase
+        .from("shop_agents")
+        .delete()
+        .eq("id", agent.link_id)
+        .eq("shop_id", shopId)
+
+      if (error) throw error
       onDeleted()
       onOpenChange(false)
     } catch (error) {
