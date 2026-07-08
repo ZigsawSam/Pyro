@@ -46,7 +46,7 @@ export default function AgentRequestsPage() {
           .from("agent_link_requests")
           .select("*")
           .eq("shop_id", shopId)
-          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
       ])
 
       if (shopError) throw shopError

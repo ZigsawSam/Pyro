@@ -141,7 +141,7 @@ export default function AgentsPage() {
     try {
       const [{ data: shopRequests, error: shopError }, { data: agentRequests, error: agentError }] = await Promise.all([
         supabase.from("agent_requests").select("*").eq("shop_id", shopId).order("requested_at", { ascending: false }),
-        supabase.from("agent_link_requests").select("*").eq("shop_id", shopId).order("created_at", { ascending: false })
+        supabase.from("agent_link_requests").select("*").eq("shop_id", shopId).order("requested_at", { ascending: false })
       ])
       if (shopError) throw shopError
       if (agentError) throw agentError

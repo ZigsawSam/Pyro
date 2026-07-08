@@ -30,6 +30,7 @@ interface Invitation {
   commission_rate: number
   message?: string
   requested_by: string
+  _source?: "agent_requests" | "agent_link_requests"
 }
 
 interface LinkedShop {
@@ -103,7 +104,7 @@ export default function AgentDashboardPage() {
   const fetchData = async (id: number) => {
     setLoading(true)
     try {
-      // Fetch shop-initiated requests (received by agent)
+      // 1. Fetch shop-initiated requests (received by agent)
       const { data: invData, error: invError } = await supabase
         .from("agent_requests")
         .select(`
@@ -119,7 +120,12 @@ export default function AgentDashboardPage() {
         .eq("agent_id", id)
         .eq("status", "pending")
 
-      // Fetch agent-initiated requests (sent by agent)
+      if (invError) {
+        console.error("invError:", invError)
+        throw invError
+      }
+
+      // 2. Fetch agent-initiated requests (sent by agent)
       const { data: sentData, error: sentError } = await supabase
         .from("agent_link_requests")
         .select(`
@@ -134,11 +140,14 @@ export default function AgentDashboardPage() {
         `)
         .eq("agent_id", id)
 
-      if (invError) throw invError
-      if (sentError) throw sentError
+      if (sentError) {
+        console.error("sentError:", sentError)
+        throw sentError
+      }
 
-            const formattedInvitations = [
-        // Received from shops
+      // 3. Merge both into invitations
+      const formattedInvitations = [
+        // Received from shops (agent can accept/reject)
         ...(invData || []).map((inv: any) => ({
           id: inv.id,
           shop_id: inv.shop_id,
@@ -147,23 +156,26 @@ export default function AgentDashboardPage() {
           commission_rate: inv.commission_rate,
           message: inv.message,
           requested_by: inv.requested_by,
+          status: inv.status,
           _source: "agent_requests" as const,
+          isReceived: true,
         })),
-        // Sent by agent (pending)
-        ...(sentData || [])
-          .filter((s: any) => s.status === "pending")
-          .map((s: any) => ({
-            id: s.id,
-            shop_id: s.shop_id,
-            shop_name: s.shops?.shop_name || "Unknown Shop",
-            shop_location: `${s.shops?.city || ""}, ${s.shops?.state || ""}`,
-            commission_rate: s.commission_rate,
-            message: s.message,
-            requested_by: s.requested_by,
-            _source: "agent_link_requests" as const,
-          }))
+        // Sent by agent (waiting for shop response)
+        ...(sentData || []).map((s: any) => ({
+          id: s.id,
+          shop_id: s.shop_id,
+          shop_name: s.shops?.shop_name || "Unknown Shop",
+          shop_location: `${s.shops?.city || ""}, ${s.shops?.state || ""}`,
+          commission_rate: s.commission_rate,
+          message: s.message,
+          requested_by: s.requested_by,
+          status: s.status,
+          _source: "agent_link_requests" as const,
+          isReceived: false,
+        }))
       ]
 
+      // 4. Fetch linked shops
       const { data: shopLinks, error: linksError } = await supabase
         .from("shop_agents")
         .select(`
@@ -173,15 +185,35 @@ export default function AgentDashboardPage() {
         `)
         .eq("agent_id", id)
 
-      if (linksError) throw linksError
+      if (linksError) {
+        console.error("linksError:", linksError)
+        throw linksError
+      }
 
+      // 5. Fetch sales for commission calculation
       const { data: salesData, error: salesError } = await supabase
         .from("sales")
         .select("shop_id, amount, commission_amount")
         .eq("agent_id", id)
 
-      if (salesError) throw salesError
+      if (salesError) {
+        console.error("salesError:", salesError)
+        throw salesError
+      }
 
+      // 6. Fetch payouts
+      const { data: payouts, error: payoutError } = await supabase
+        .from("payouts")
+        .select("shop_id, amount_paid")
+        .eq("person_id", id)
+        .eq("person_type", "agent")
+
+      if (payoutError) {
+        console.error("payoutError:", payoutError)
+        throw payoutError
+      }
+
+      // Calculate stats
       const shopStats = (salesData || []).reduce((acc: any, sale: any) => {
         if (!acc[sale.shop_id]) {
           acc[sale.shop_id] = { total_sales: 0, total_commission: 0 }
@@ -190,14 +222,6 @@ export default function AgentDashboardPage() {
         acc[sale.shop_id].total_commission += Number(sale.commission_amount || 0)
         return acc
       }, {})
-
-      const { data: payouts, error: payoutError } = await supabase
-        .from("payouts")
-        .select("shop_id, amount_paid")
-        .eq("person_id", id)
-        .eq("person_type", "agent")
-
-      if (payoutError) throw payoutError
 
       const paidByShop = (payouts || []).reduce((acc: any, p: any) => {
         acc[p.shop_id] = (acc[p.shop_id] || 0) + Number(p.amount_paid || 0)
@@ -215,8 +239,13 @@ export default function AgentDashboardPage() {
 
       setInvitations(formattedInvitations)
       setLinkedShops(formattedLinkedShops)
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
+    } catch (e) {
+      console.error("fetchData error:", e)
+      // Don't silently fail - show error to user
+      alert("Failed to load dashboard data. Please refresh.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fetchSales = async () => {
@@ -360,9 +389,24 @@ export default function AgentDashboardPage() {
     }
   }
 
-  const handleInvitation = async (inviteId: number, action: "accept" | "reject") => {
+    const handleInvitation = async (inviteId: number, action: "accept" | "reject") => {
     setProcessingInvite(inviteId)
     try {
+      // Verify this is a shop-initiated request (agent can only respond to shop requests)
+      const { data: reqCheck, error: checkError } = await supabase
+        .from("agent_requests")
+        .select("requested_by")
+        .eq("id", inviteId)
+        .single()
+      
+      if (checkError) throw checkError
+      
+      if (reqCheck?.requested_by === "agent") {
+        alert("You cannot accept or reject your own sent request. The shop must respond.")
+        setProcessingInvite(null)
+        return
+      }
+      
       const { error } = await supabase
         .from("agent_requests")
         .update({ status: action === "accept" ? "approved" : "rejected" })
@@ -559,7 +603,10 @@ export default function AgentDashboardPage() {
                     <p className="font-medium">{inv.shop_name}</p>
                     <p className="text-sm text-muted-foreground">{inv.shop_location}</p>
                     <p className="text-sm">Commission: {inv.commission_rate}%</p>
-                    {inv.message && <p className="text-sm text-muted-foreground italic">"{inv.message}"</p>}
+                  {inv.message && <p className="text-sm text-muted-foreground italic">"{inv.message}"</p>}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {inv.requested_by === "agent" ? "Sent by you" : "Received from shop"}
+                  </p>
                   </div>
                   <div className="flex gap-2">
                     <Button
