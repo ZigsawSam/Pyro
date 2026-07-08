@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Loader2, CheckCircle, XCircle, Clock } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { MainLayout } from "@/components/layout/main-layout"
 
 interface AgentRequest {
   id: number
@@ -50,7 +51,6 @@ export default function AgentRequestsPage({ params }: { params: { shopId: string
 
   const handleAction = async (requestId: number, action: "approved" | "rejected") => {
     try {
-      // Update request status
       const { error } = await supabase
         .from("agent_requests")
         .update({ status: action, responded_at: new Date().toISOString() })
@@ -59,7 +59,6 @@ export default function AgentRequestsPage({ params }: { params: { shopId: string
 
       if (error) throw error
 
-      // If approved, create shop_agent link
       if (action === "approved") {
         const request = requests.find((r) => r.id === requestId)
         if (request) {
@@ -80,9 +79,7 @@ export default function AgentRequestsPage({ params }: { params: { shopId: string
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">Agent Requests</h1>
-
+    <MainLayout title="Agent Requests" shopId={shopId}>
       {loading ? (
         <div className="flex justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin" />
@@ -104,11 +101,7 @@ export default function AgentRequestsPage({ params }: { params: { shopId: string
                 <div className="flex items-center gap-2">
                   {req.status === "pending" ? (
                     <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleAction(req.id, "rejected")}
-                      >
+                      <Button size="sm" variant="outline" onClick={() => handleAction(req.id, "rejected")}>
                         <XCircle className="h-4 w-4 mr-1" /> Reject
                       </Button>
                       <Button size="sm" onClick={() => handleAction(req.id, "approved")}>
@@ -116,9 +109,7 @@ export default function AgentRequestsPage({ params }: { params: { shopId: string
                       </Button>
                     </>
                   ) : (
-                    <span className={`text-sm flex items-center gap-1 ${
-                      req.status === "approved" ? "text-green-600" : "text-red-600"
-                    }`}>
+                    <span className={`text-sm flex items-center gap-1 ${req.status === "approved" ? "text-green-600" : "text-red-600"}`}>
                       {req.status === "approved" ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                       {req.status}
                     </span>
@@ -132,6 +123,6 @@ export default function AgentRequestsPage({ params }: { params: { shopId: string
           )}
         </div>
       )}
-    </div>
+    </MainLayout>
   )
 }

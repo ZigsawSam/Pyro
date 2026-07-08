@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Loader2, Plus, Phone, User } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { MainLayout } from "@/components/layout/main-layout"
 import { StaffProfileDialog } from "@/components/staff/staff-profile-dialog"
 import { PayStaffDialog } from "@/components/staff/pay-staff-dialog"
 
@@ -129,7 +130,7 @@ export default function ShopStaffPage({ params }: { params: { shopId: string } }
   )
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <MainLayout title="Staff" shopId={shopId}>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Staff</h1>
         <Button onClick={() => setShowAddForm(true)}>
@@ -228,6 +229,6 @@ export default function ShopStaffPage({ params }: { params: { shopId: string } }
           onPaid={fetchStaff}
         />
       )}
-    </div>
+    </MainLayout>
   )
 }

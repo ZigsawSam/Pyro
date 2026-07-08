@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Loader2, Download } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { MainLayout } from "@/components/layout/main-layout"
 
 export default function ShopReportsPage({ params }: { params: { shopId: string } }) {
   const supabase = createClient()
@@ -21,28 +22,11 @@ export default function ShopReportsPage({ params }: { params: { shopId: string }
       const from = dateFrom || new Date().toISOString().slice(0, 10)
       const to = dateTo || new Date().toISOString().slice(0, 10)
 
-      // Sales summary
-      const { data: salesData } = await supabase
-        .from("sales")
-        .select("amount, commission_amount, sale_date")
-        .eq("shop_id", shopId)
-        .gte("sale_date", from)
-        .lte("sale_date", to)
-
-      // Payouts summary
-      const { data: payoutsData } = await supabase
-        .from("payouts")
-        .select("amount_paid, person_type, is_advance")
-        .eq("shop_id", shopId)
-        .gte("payment_date", from)
-        .lte("payment_date", to)
-
-      // Staff salary
-      const { data: salaryData } = await supabase
-        .from("salary")
-        .select("final_payable, status")
-        .eq("shop_id", shopId)
-        .eq("month", from.slice(0, 7))
+      const [{ data: salesData }, { data: payoutsData }, { data: salaryData }] = await Promise.all([
+        supabase.from("sales").select("amount, commission_amount, sale_date").eq("shop_id", shopId).gte("sale_date", from).lte("sale_date", to),
+        supabase.from("payouts").select("amount_paid, person_type, is_advance").eq("shop_id", shopId).gte("payment_date", from).lte("payment_date", to),
+        supabase.from("salary").select("final_payable, status").eq("shop_id", shopId).eq("month", from.slice(0, 7)),
+      ])
 
       const totalSales = (salesData || []).reduce((sum, s) => sum + Number(s.amount || 0), 0)
       const totalCommission = (salesData || []).reduce((sum, s) => sum + Number(s.commission_amount || 0), 0)
@@ -73,9 +57,7 @@ export default function ShopReportsPage({ params }: { params: { shopId: string }
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">Reports</h1>
-
+    <MainLayout title="Reports" shopId={shopId}>
       <Card className="p-4">
         <div className="flex gap-2 items-end flex-wrap">
           <div>
@@ -94,7 +76,7 @@ export default function ShopReportsPage({ params }: { params: { shopId: string }
       </Card>
 
       {reportData && (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 mt-6">
           <Card className="p-4">
             <p className="text-sm text-muted-foreground">Total Sales</p>
             <p className="text-2xl font-bold">₹{reportData.totalSales.toLocaleString()}</p>
@@ -119,6 +101,6 @@ export default function ShopReportsPage({ params }: { params: { shopId: string }
           </Card>
         </div>
       )}
-    </div>
+    </MainLayout>
   )
 }

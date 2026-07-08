@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Loader2, Plus, CheckCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { MainLayout } from "@/components/layout/main-layout"
 
 interface SalaryRecord {
   id: number
@@ -172,7 +173,7 @@ export default function ShopSalaryPage({ params }: { params: { shopId: string } 
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <MainLayout title="Salary" shopId={shopId}>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Salary</h1>
         <div className="flex gap-2">
@@ -231,6 +232,6 @@ export default function ShopSalaryPage({ params }: { params: { shopId: string } 
           </table>
         </div>
       )}
-    </div>
+    </MainLayout>
   )
 }

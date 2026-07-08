@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Loader2, Save } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { MainLayout } from "@/components/layout/main-layout"
 
 interface StaffAttendance {
   staff_id: number
@@ -104,7 +105,7 @@ export default function ShopAttendancePage({ params }: { params: { shopId: strin
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <MainLayout title="Attendance" shopId={shopId}>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Attendance</h1>
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto" />
@@ -160,6 +161,6 @@ export default function ShopAttendancePage({ params }: { params: { shopId: strin
           )}
         </>
       )}
-    </div>
+    </MainLayout>
   )
 }
