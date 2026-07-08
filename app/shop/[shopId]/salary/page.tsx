@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Plus, Loader2, CreditCard, CheckCircle2 } from "lucide-react"
 import { format } from "date-fns"
 import { PayrollPaymentDialog } from "@/components/payroll/payroll-payment-dialog"
-import { getShopToken } from "@/lib/storage-utils"
 
 interface Salary {
   id: number
@@ -40,7 +39,7 @@ export default function SalaryPage() {
 
   const fetchSalaries = async () => {
     try {
-      const response = await fetch(`/api/shops/${shopId}/salary?month=${month}`, { headers: { Authorization: `Bearer ${getShopToken()}` } })
+      const response = await fetch(`/api/shops/${shopId}/salary?month=${month}`)
       if (!response.ok) throw new Error("Failed to fetch salaries")
       const data = await response.json()
       setSalaries(data.salaries || [])
@@ -50,7 +49,7 @@ export default function SalaryPage() {
   const handleGenerateSalary = async () => {
     setIsGenerating(true)
     try {
-      const response = await fetch(`/api/shops/${shopId}/salary/generate`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getShopToken()}` }, body: JSON.stringify({ month: `${month}-01` }) })
+      const response = await fetch(`/api/shops/${shopId}/salary/generate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ month: `${month}-01` }) })
       if (!response.ok) throw new Error("Failed to generate salary")
       fetchSalaries()
     } catch (error) { console.error("Error:", error) } finally { setIsGenerating(false) }

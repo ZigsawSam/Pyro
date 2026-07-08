@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getDb } from "@/lib/db"
+import { createClient } from "@/lib/supabase/server"
 
 export async function PUT(
   request: NextRequest,
@@ -8,39 +8,54 @@ export async function PUT(
   try {
     const { shopId, linkId } = await params
     const body = await request.json()
-    const sql = getDb()
+    const supabase = await createClient()
 
-    const linkResult = await sql`
-      SELECT agent_id FROM shop_agent_links
-      WHERE id = ${Number(linkId)} AND shop_id = ${Number(shopId)}
-    `
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    if (linkResult.length === 0) {
+    const { data: linkResult, error: linkError } = await supabase
+      .from("shop_agent_links")
+      .select("agent_id")
+      .eq("id", Number(linkId))
+      .eq("shop_id", Number(shopId))
+      .single()
+
+    if (linkError || !linkResult) {
       return NextResponse.json({ error: "Agent link not found" }, { status: 404 })
     }
 
-    const agentId = linkResult[0].agent_id
+    const agentId = linkResult.agent_id
 
-    await sql`
-      UPDATE agents
-      SET
-        name = ${body.name ?? null},
-        phone_number = ${body.phone_number ?? null},
-        description = ${body.description ?? null},
-        account_name = ${body.account_name ?? null},
-        account_number = ${body.account_number ?? null},
-        bank_name = ${body.bank_name ?? null},
-        ifsc_code = ${body.ifsc_code ?? null},
-        upi_id = ${body.upi_id ?? null}
-      WHERE id = ${agentId}
-    `
+    const { error: agentError } = await supabase
+      .from("agents")
+      .update({
+        name: body.name ?? null,
+        phone_number: body.phone_number ?? null,
+        description: body.description ?? null,
+        account_name: body.account_name ?? null,
+        account_number: body.account_number ?? null,
+        bank_name: body.bank_name ?? null,
+        ifsc_code: body.ifsc_code ?? null,
+        upi_id: body.upi_id ?? null,
+      })
+      .eq("id", agentId)
+
+    if (agentError) {
+      console.error("Error updating agent:", agentError)
+      return NextResponse.json({ error: agentError.message }, { status: 500 })
+    }
 
     if (body.commission_rate !== undefined) {
-      await sql`
-        UPDATE shop_agent_links
-        SET commission_rate = ${body.commission_rate}
-        WHERE id = ${Number(linkId)} AND shop_id = ${Number(shopId)}
-      `
+      const { error: rateError } = await supabase
+        .from("shop_agent_links")
+        .update({ commission_rate: body.commission_rate })
+        .eq("id", Number(linkId))
+        .eq("shop_id", Number(shopId))
+
+      if (rateError) {
+        console.error("Error updating commission rate:", rateError)
+        return NextResponse.json({ error: rateError.message }, { status: 500 })
+      }
     }
 
     return NextResponse.json({ success: true })
@@ -56,34 +71,55 @@ export async function DELETE(
 ) {
   try {
     const { shopId, linkId } = await params
-    const sql = getDb()
+    const supabase = await createClient()
 
-    const linkResult = await sql`
-      SELECT agent_id FROM shop_agent_links
-      WHERE id = ${Number(linkId)} AND shop_id = ${Number(shopId)}
-    `
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    if (linkResult.length === 0) {
+    const { data: linkResult, error: linkError } = await supabase
+      .from("shop_agent_links")
+      .select("agent_id")
+      .eq("id", Number(linkId))
+      .eq("shop_id", Number(shopId))
+      .single()
+
+    if (linkError || !linkResult) {
       return NextResponse.json({ error: "Agent link not found" }, { status: 404 })
     }
 
-    const agentId = linkResult[0].agent_id
-    const remainingLinks = await sql`
-      SELECT id FROM shop_agent_links
-      WHERE agent_id = ${agentId}
-    `
+    const agentId = linkResult.agent_id
 
-    await sql`
-      DELETE FROM shop_agent_links
-      WHERE id = ${Number(linkId)} AND shop_id = ${Number(shopId)}
-    `
+    const { data: remainingLinks, error: countError } = await supabase
+      .from("shop_agent_links")
+      .select("id")
+      .eq("agent_id", agentId)
 
-    if (remainingLinks.length <= 1) {
-      await sql`
-        UPDATE agents
-        SET is_active = false
-        WHERE id = ${agentId}
-      `
+    if (countError) {
+      console.error("Error counting links:", countError)
+      return NextResponse.json({ error: countError.message }, { status: 500 })
+    }
+
+    const { error: deleteError } = await supabase
+      .from("shop_agent_links")
+      .delete()
+      .eq("id", Number(linkId))
+      .eq("shop_id", Number(shopId))
+
+    if (deleteError) {
+      console.error("Error removing agent link:", deleteError)
+      return NextResponse.json({ error: deleteError.message }, { status: 500 })
+    }
+
+    if (remainingLinks && remainingLinks.length <= 1) {
+      const { error: deactivateError } = await supabase
+        .from("agents")
+        .update({ is_active: false })
+        .eq("id", agentId)
+
+      if (deactivateError) {
+        console.error("Error deactivating agent:", deactivateError)
+        return NextResponse.json({ error: deactivateError.message }, { status: 500 })
+      }
     }
 
     return NextResponse.json({ success: true })

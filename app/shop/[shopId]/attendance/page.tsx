@@ -6,7 +6,6 @@ import { MainLayout } from "@/components/layout/main-layout"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
-import { getShopToken } from "@/lib/storage-utils"
 
 interface AttendanceRecord {
   staff_id: number
@@ -41,10 +40,7 @@ export default function AttendancePage() {
 
   const fetchAttendance = async () => {
     try {
-      const token = getShopToken()
-      const response = await fetch(`/api/shops/${shopId}/attendance?date=${date}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const response = await fetch(`/api/shops/${shopId}/attendance?date=${date}`)
       if (!response.ok) throw new Error("Failed to fetch attendance")
       const data = await response.json()
       setAttendance(data.attendance || [])
@@ -69,12 +65,10 @@ export default function AttendancePage() {
 
   const handleSaveAttendance = async (staffId: number, status: "present" | "absent" | "half") => {
     try {
-      const token = getShopToken()
       const response = await fetch(`/api/shops/${shopId}/attendance`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           staff_id: staffId,

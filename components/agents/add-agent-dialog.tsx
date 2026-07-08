@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loader2, AlertCircle } from "lucide-react"
-import { getShopToken } from "@/lib/storage-utils"
 
 interface AddAgentDialogProps {
   open: boolean
@@ -64,12 +63,10 @@ export function AddAgentDialog({ open, onOpenChange, onAgentAdded, shopId }: Add
 
       const agent = await response.json()
 
-      const token = getShopToken()
       const linkResponse = await fetch(`/api/shops/${shopId}/agents`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token || ""}`,
         },
         body: JSON.stringify({
           agent_id: agent.id,
@@ -120,12 +117,10 @@ export function AddAgentDialog({ open, onOpenChange, onAgentAdded, shopId }: Add
 
       const agent = agents[0]
 
-      const token = getShopToken()
       const linkResponse = await fetch(`/api/shops/${shopId}/agents`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token || ""}`,
         },
         body: JSON.stringify({
           agent_id: agent.id,

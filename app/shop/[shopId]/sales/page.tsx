@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Plus, Loader2 } from "lucide-react"
-import { getShopToken } from "@/lib/storage-utils"
 
 interface Sale {
   id: number
@@ -41,10 +40,7 @@ export default function SalesPage() {
 
   const fetchSales = async () => {
     try {
-      const token = getShopToken()
-      const response = await fetch(`/api/shops/${shopId}/sales`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const response = await fetch(`/api/shops/${shopId}/sales`)
       if (!response.ok) throw new Error("Failed to fetch sales")
       const data = await response.json()
       setSales(data.sales)
@@ -57,10 +53,7 @@ export default function SalesPage() {
 
   const fetchAgents = async () => {
     try {
-      const token = getShopToken()
-      const response = await fetch(`/api/shops/${shopId}/agents`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const response = await fetch(`/api/shops/${shopId}/agents`)
       if (!response.ok) throw new Error("Failed to fetch agents")
       const data = await response.json()
       setAgents(data.agents)
@@ -80,12 +73,10 @@ export default function SalesPage() {
     setIsSubmitting(true)
 
     try {
-      const token = getShopToken()
       const response = await fetch(`/api/shops/${shopId}/sales`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           agent_id: Number(formData.agent_id),

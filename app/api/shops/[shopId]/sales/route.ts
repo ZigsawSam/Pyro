@@ -1,20 +1,44 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getDb } from "@/lib/db"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ shopId: string }> }) {
   try {
     const { shopId } = await params
-    const sql = getDb()
+    const supabase = await createClient()
+    const shopIdNum = Number(shopId)
 
-    const sales = await sql`
-      SELECT s.*, a.name as agent_name
-      FROM sales s
-      JOIN agents a ON s.agent_id = a.id
-      WHERE s.shop_id = ${Number(shopId)}
-      ORDER BY s.sale_date DESC
-    `
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    return NextResponse.json({ sales })
+    const { data: sales, error } = await supabase
+      .from("sales")
+      .select(`
+        id,
+        shop_id,
+        agent_id,
+        amount,
+        commission_amount,
+        sale_date,
+        notes,
+        created_at,
+        agents:agent_id (
+          name
+        )
+      `)
+      .eq("shop_id", shopIdNum)
+      .order("sale_date", { ascending: false })
+
+    if (error) {
+      console.error("Error:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    const formatted = sales?.map((s: any) => ({
+      ...s,
+      agent_name: s.agents?.name || "Unknown",
+    })) || []
+
+    return NextResponse.json({ sales: formatted })
   } catch (error) {
     console.error("Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -25,25 +49,43 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { shopId } = await params
     const { agent_id, amount, notes } = await request.json()
-    const sql = getDb()
+    const supabase = await createClient()
+    const shopIdNum = Number(shopId)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     // Get commission rate for this agent-shop pair
-    const link = await sql`
-      SELECT commission_rate FROM shop_agent_links
-      WHERE shop_id = ${Number(shopId)} AND agent_id = ${agent_id}
-    `
+    const { data: link, error: linkError } = await supabase
+      .from("shop_agent_links")
+      .select("commission_rate")
+      .eq("shop_id", shopIdNum)
+      .eq("agent_id", agent_id)
+      .single()
 
-    if (link.length === 0) return NextResponse.json({ error: "Agent not found" }, { status: 400 })
+    if (linkError || !link) return NextResponse.json({ error: "Agent not found" }, { status: 400 })
 
-    const commissionAmount = (amount * link[0].commission_rate) / 100
+    const commissionAmount = (Number(amount) * link.commission_rate) / 100
 
-    const sale = await sql`
-      INSERT INTO sales (shop_id, agent_id, amount, commission_amount, sale_date, notes)
-      VALUES (${Number(shopId)}, ${agent_id}, ${amount}, ${commissionAmount}, CURRENT_DATE, ${notes || null})
-      RETURNING *
-    `
+    const { data: sale, error: insertError } = await supabase
+      .from("sales")
+      .insert({
+        shop_id: shopIdNum,
+        agent_id: agent_id,
+        amount: Number(amount),
+        commission_amount: commissionAmount,
+        sale_date: new Date().toISOString().split("T")[0],
+        notes: notes || null,
+      })
+      .select()
+      .single()
 
-    return NextResponse.json(sale[0], { status: 201 })
+    if (insertError) {
+      console.error("Error:", insertError)
+      return NextResponse.json({ error: insertError.message }, { status: 500 })
+    }
+
+    return NextResponse.json(sale, { status: 201 })
   } catch (error) {
     console.error("Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

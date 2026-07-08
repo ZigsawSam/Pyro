@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getDb } from "@/lib/db"
+import { createClient } from "@/lib/supabase/server"
 
 export async function POST(
   request: NextRequest,
@@ -7,9 +7,21 @@ export async function POST(
 ) {
   try {
     const { shopId, salaryId } = await params
-    const sql = getDb()
+    const supabase = await createClient()
 
-    await sql`UPDATE salary SET status = 'paid' WHERE id = ${Number(salaryId)} AND shop_id = ${Number(shopId)}`
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const { error } = await supabase
+      .from("salary")
+      .update({ status: "paid" })
+      .eq("id", Number(salaryId))
+      .eq("shop_id", Number(shopId))
+
+    if (error) {
+      console.error("Error:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

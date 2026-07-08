@@ -1,3 +1,19 @@
 node_modules/
 .env.local
 .next/
+
+# Next.js build output
+.next/
+out/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# Build tools
+bfg-*.jar
+
+# TypeScript
+tsconfig.tsbuildinfo

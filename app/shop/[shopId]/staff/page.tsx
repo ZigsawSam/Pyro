@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Plus, Loader2, UserRound, CreditCard, CheckCircle2 } from "lucide-react"
-import { getShopToken } from "@/lib/storage-utils"
 import { StaffProfileDialog } from "@/components/staff/staff-profile-dialog"
 import { PayStaffDialog } from "@/components/staff/pay-staff-dialog"
 
@@ -65,15 +64,7 @@ export default function StaffPage() {
 
   const fetchStaff = async () => {
     try {
-      const token = getShopToken()
-      if (!token) {
-        console.error("No auth token found")
-        setIsLoading(false)
-        return
-      }
-      const response = await fetch(`/api/shops/${shopId}/staff`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const response = await fetch(`/api/shops/${shopId}/staff`)
       if (!response.ok) {
         if (response.status === 401) {
           console.error("Session expired — please log in again.")
@@ -96,10 +87,9 @@ export default function StaffPage() {
     setIsSubmitting(true)
     setAddError(null)
     try {
-      const token = getShopToken()
       const response = await fetch(`/api/shops/${shopId}/staff`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: formData.name,
           phone: formData.phone,

@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, Store, Clock, CheckCircle, XCircle, Search, ArrowRight, Wallet, TrendingUp, Receipt, Calendar, Filter } from "lucide-react"
-import { getAgentSession, getAgentToken } from "@/lib/storage-utils"
+import { Loader2, Store, Clock, CheckCircle, XCircle, Search, ArrowRight, Wallet, TrendingUp, Receipt, Filter } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 interface Shop {
   id: number
@@ -52,6 +52,7 @@ interface SaleRecord {
 
 export default function AgentDashboardPage() {
   const router = useRouter()
+  const supabase = createClient()
   const [agentId, setAgentId] = useState<number | null>(null)
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [linkedShops, setLinkedShops] = useState<LinkedShop[]>([])
@@ -74,23 +75,36 @@ export default function AgentDashboardPage() {
   const [showSalesSection, setShowSalesSection] = useState(false)
 
   useEffect(() => {
-    const session = getAgentSession()
-    if (!session) {
-      router.push("/auth/agent-login")
-      return
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push("/auth/agent-login")
+        return
+      }
+      // Get agent ID from agents table using user_id
+      const { data: agent } = await supabase
+        .from("agents")
+        .select("id")
+        .eq("user_id", user.id)
+        .single()
+      
+      if (!agent) {
+        router.push("/auth/agent-login")
+        return
+      }
+      
+      setAgentId(agent.id)
+      fetchData(agent.id)
     }
-    setAgentId(session.id)
-    fetchData(session.id)
-  }, [router])
+    checkAuth()
+  }, [router, supabase])
 
   const fetchData = async (id: number) => {
     setLoading(true)
     try {
-      const token = getAgentToken()
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined
       const [invRes, shopsRes] = await Promise.all([
-        fetch(`/api/agents/invitations?agentId=${id}`, { headers }),
-        fetch(`/api/agents/linked-shops?agentId=${id}`, { headers }),
+        fetch(`/api/agents/invitations?agentId=${id}`),
+        fetch(`/api/agents/linked-shops?agentId=${id}`),
       ])
       const invData = await invRes.json()
       const shopsData = await shopsRes.json()
@@ -100,18 +114,16 @@ export default function AgentDashboardPage() {
     finally { setLoading(false) }
   }
 
-    const fetchSales = async () => {
+  const fetchSales = async () => {
     if (!agentId) return
     setSalesLoading(true)
     try {
-      const token = getAgentToken()
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined
       let url = `/api/agents/sales?agentId=${agentId}`
       if (salesFilterShop !== "all") url += `&shopId=${salesFilterShop}`
       if (salesDateFrom) url += `&from=${salesDateFrom}`
       if (salesDateTo) url += `&to=${salesDateTo}`
       
-      const res = await fetch(url, { headers })
+      const res = await fetch(url)
       const data = await res.json()
       setSalesRecords(Array.isArray(data.sales) ? data.sales : [])
     } catch (e) { 
@@ -132,9 +144,7 @@ export default function AgentDashboardPage() {
     if (!searchQuery.trim() || !agentId) return
     setSearching(true)
     try {
-      const token = getAgentToken()
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined
-      const res = await fetch(`/api/agents/shops?agentId=${agentId}&search=${encodeURIComponent(searchQuery)}`, { headers })
+      const res = await fetch(`/api/agents/shops?agentId=${agentId}&search=${encodeURIComponent(searchQuery)}`)
       const data = await res.json()
       setSearchResults(data.shops || [])
     } catch (e) { console.error(e) }
@@ -145,12 +155,9 @@ export default function AgentDashboardPage() {
     if (!selectedShop || !requestRate || !agentId) return
     setSubmitting(true)
     try {
-      const token = getAgentToken()
-      const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (token) headers["Authorization"] = `Bearer ${token}`
       const res = await fetch("/api/agents/link-requests", {
         method: "POST",
-        headers,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agent_id: agentId,
           shop_id: selectedShop.id,
@@ -182,12 +189,9 @@ export default function AgentDashboardPage() {
   const handleInvitation = async (inviteId: number, action: "accept" | "reject") => {
     setProcessingInvite(inviteId)
     try {
-      const token = getAgentToken()
-      const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (token) headers["Authorization"] = `Bearer ${token}`
       const res = await fetch("/api/agents/invitations", {
         method: "PUT",
-        headers,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ request_id: inviteId, action }),
       })
       if (!res.ok) throw new Error("Failed")
@@ -196,12 +200,13 @@ export default function AgentDashboardPage() {
     finally { setProcessingInvite(null) }
   }
 
-    const totalSalesAmount = Array.isArray(salesRecords) 
+  const totalSalesAmount = Array.isArray(salesRecords) 
     ? salesRecords.reduce((sum, s) => sum + Number(s.amount || 0), 0) 
     : 0
-    const totalCommissionAmount = Array.isArray(salesRecords) 
+  const totalCommissionAmount = Array.isArray(salesRecords) 
     ? salesRecords.reduce((sum, s) => sum + Number(s.commission_amount || 0), 0) 
     : 0
+
   if (!agentId) {
     return (
       <div className="flex items-center justify-center min-h-screen">

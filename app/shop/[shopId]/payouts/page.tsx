@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Plus, Loader2 } from "lucide-react"
-import { getShopToken } from "@/lib/storage-utils"
 
 interface Payout {
   id: number
@@ -44,8 +43,7 @@ export default function PayoutsPage() {
 
   const fetchPayouts = async () => {
     try {
-      const token = getShopToken()
-      const response = await fetch(`/api/shops/${shopId}/payouts`, { headers: { Authorization: `Bearer ${token}` } })
+      const response = await fetch(`/api/shops/${shopId}/payouts`)
       if (!response.ok) throw new Error("Failed to fetch payouts")
       const data = await response.json()
       setPayouts(data.payouts || [])
@@ -54,10 +52,9 @@ export default function PayoutsPage() {
 
   const fetchPeople = async () => {
     try {
-      const token = getShopToken()
       const [agentsResponse, staffResponse] = await Promise.all([
-        fetch(`/api/shops/${shopId}/agents`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`/api/shops/${shopId}/staff`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/shops/${shopId}/agents`),
+        fetch(`/api/shops/${shopId}/staff`),
       ])
       const agentsData = await agentsResponse.json()
       const staffData = await staffResponse.json()
@@ -83,10 +80,9 @@ export default function PayoutsPage() {
     if (!formData.person_id || !formData.amount_paid) return
     setIsSubmitting(true)
     try {
-      const token = getShopToken()
       const response = await fetch(`/api/shops/${shopId}/payouts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           person_type: formData.person_type,
           person_id: Number(formData.person_id),
@@ -100,7 +96,6 @@ export default function PayoutsPage() {
       }
       const result = await response.json()
 
-      // Show feedback about split
       if (result.advance_amount > 0) {
         alert(`Payment recorded: ₹${Number(result.amount_paid).toLocaleString()}\n₹${Number(result.clearing_amount).toLocaleString()} cleared pending\n₹${Number(result.advance_amount).toLocaleString()} saved as advance`)
       }

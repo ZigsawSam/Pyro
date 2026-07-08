@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Receipt, QrCode, Wallet } from "lucide-react"
 import QRCode from "qrcode"
-import { getShopToken } from "@/lib/storage-utils"
 
 interface PayStaffDialogProps {
   open: boolean
@@ -37,10 +36,7 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
     const fetchSales = async () => {
       setIsLoading(true)
       try {
-        const token = getShopToken()
-        const response = await fetch(`/api/shops/${shopId}/sales`, {
-          headers: { Authorization: `Bearer ${token || ""}` },
-        })
+        const response = await fetch(`/api/shops/${shopId}/sales`)
         if (!response.ok) throw new Error("Failed to load sales")
         const data = await response.json()
         const staffSales = (data.sales || []).filter((sale: any) => sale.staff_id === staff.id)
@@ -146,12 +142,10 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
     setIsLoading(true)
     setErrorMsg(null)
     try {
-      const token = getShopToken()
       const response = await fetch(`/api/shops/${shopId}/payouts`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token || ""}`,
         },
         body: JSON.stringify({
           person_type: "staff",

@@ -1,41 +1,96 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getDb } from "@/lib/db"
+import { createClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ shopId: string }> }) {
   try {
     const { shopId } = await params
     const { month } = await request.json()
-    const sql = getDb()
+    const supabase = await createClient()
+    const shopIdNum = Number(shopId)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     if (!month) {
       return NextResponse.json({ error: "Month is required" }, { status: 400 })
     }
 
     // Get all active staff for the shop
-    const staff = await sql`SELECT id, base_salary FROM staff WHERE shop_id = ${Number(shopId)} AND is_active = true`
+    const { data: staff, error: staffError } = await supabase
+      .from("staff")
+      .select("id, base_salary")
+      .eq("shop_id", shopIdNum)
+      .eq("is_active", true)
+
+    if (staffError) {
+      console.error("Error generating salary:", staffError)
+      return NextResponse.json({ error: staffError.message }, { status: 500 })
+    }
+
+    const monthStart = `${month}-01`
+    const monthEnd = new Date(new Date(monthStart).getFullYear(), new Date(monthStart).getMonth() + 1, 0).toISOString().split("T")[0]
 
     // For each staff member, calculate salary based on attendance for the given month
-    for (const member of staff) {
-      const attendance = await sql`
-        SELECT COUNT(CASE WHEN status = 'present' THEN 1 END) as present_days,
-               COUNT(CASE WHEN status = 'half' THEN 1 END) * 0.5 as half_days
-        FROM attendance
-        WHERE staff_id = ${member.id} AND DATE_TRUNC('month', attendance_date) = DATE_TRUNC('month', ${month})
-      `
+    for (const member of staff || []) {
+      const { data: attendance, error: attendanceError } = await supabase
+        .from("attendance")
+        .select("status")
+        .eq("staff_id", member.id)
+        .gte("attendance_date", monthStart)
+        .lte("attendance_date", monthEnd)
 
-      const presentDays = (attendance[0]?.present_days || 0) + (attendance[0]?.half_days || 0)
-      const advances = await sql`
-        SELECT COALESCE(SUM(amount), 0) as total FROM withdrawals
-        WHERE staff_id = ${member.id} AND DATE_TRUNC('month', withdrawal_date) = DATE_TRUNC('month', ${month})
-      `
+      if (attendanceError) {
+        console.error("Error generating salary:", attendanceError)
+        return NextResponse.json({ error: attendanceError.message }, { status: 500 })
+      }
 
-      const finalPayable = (member.base_salary / 30) * presentDays - (advances[0]?.total || 0)
+      let presentDays = 0
+      let halfDays = 0
 
-      await sql`
-        INSERT INTO salary (staff_id, shop_id, month, base_salary, present_days, final_payable, status)
-        VALUES (${member.id}, ${Number(shopId)}, ${month}, ${member.base_salary}, ${Math.round(presentDays)}, ${finalPayable}, 'pending')
-        ON CONFLICT (staff_id, month) DO UPDATE SET final_payable = ${finalPayable}
-      `
+      attendance?.forEach((record: any) => {
+        if (record.status === "present") presentDays += 1
+        else if (record.status === "half") halfDays += 0.5
+      })
+
+      const totalPresentDays = presentDays + halfDays
+
+      // Get advances for the month
+      const { data: advances, error: advancesError } = await supabase
+        .from("payouts")
+        .select("amount_paid")
+        .eq("staff_id", member.id)
+        .eq("is_advance", true)
+        .gte("payment_date", monthStart)
+        .lte("payment_date", monthEnd)
+
+      if (advancesError) {
+        console.error("Error generating salary:", advancesError)
+        return NextResponse.json({ error: advancesError.message }, { status: 500 })
+      }
+
+      const totalAdvance = advances?.reduce((sum: number, w: any) => sum + (w.amount_paid || 0), 0) || 0
+      const dailyRate = member.base_salary / 30
+      const finalPayable = dailyRate * totalPresentDays - totalAdvance
+
+      // Upsert salary record
+      const { error: upsertError } = await supabase
+        .from("salary")
+        .upsert({
+          staff_id: member.id,
+          shop_id: shopIdNum,
+          month: month,
+          base_salary: member.base_salary,
+          present_days: Math.round(totalPresentDays),
+          final_payable: finalPayable,
+          status: "pending",
+        }, {
+          onConflict: "staff_id,month",
+        })
+
+      if (upsertError) {
+        console.error("Error generating salary:", upsertError)
+        return NextResponse.json({ error: upsertError.message }, { status: 500 })
+      }
     }
 
     return NextResponse.json({ success: true })

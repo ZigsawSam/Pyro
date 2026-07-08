@@ -12,7 +12,7 @@ import { AddAgentDialog } from "@/components/agents/add-agent-dialog"
 import { AgentProfileDialog } from "@/components/agents/agent-profile-dialog"
 import { PayAgentDialog } from "@/components/agents/pay-agent-dialog"
 import { Plus, CreditCard, UserRound, CheckCircle2, UserPlus, Bell, Search, ArrowRight, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react"
-import { getShopToken } from "@/lib/storage-utils"
+import { createClient } from "@/lib/supabase/client"
 
 interface ShopAgent {
   link_id: number
@@ -69,10 +69,7 @@ export default function AgentsPage() {
 
   const fetchAgents = async () => {
     try {
-      const token = getShopToken()
-      const response = await fetch(`/api/shops/${shopId}/agents`, {
-        headers: { Authorization: `Bearer ${token || ""}` },
-      })
+      const response = await fetch(`/api/shops/${shopId}/agents`)
       if (!response.ok) throw new Error("Failed to fetch agents")
       const data = await response.json()
       setAgents(data.agents || [])

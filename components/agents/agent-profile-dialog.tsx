@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loader2, Pencil, Trash2, Wallet, CheckCircle2 } from "lucide-react"
-import { getShopToken } from "@/lib/storage-utils"
 
 interface AgentProfileDialogProps {
   open: boolean
@@ -53,10 +52,7 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
   const fetchAdvances = async () => {
     if (!agent) return
     try {
-      const token = getShopToken()
-      const response = await fetch(`/api/shops/${shopId}/payouts`, {
-        headers: { Authorization: `Bearer ${token || ""}` },
-      })
+      const response = await fetch(`/api/shops/${shopId}/payouts`)
       if (!response.ok) return
       const data = await response.json()
       const agentAdvances = (data.payouts || []).filter(
@@ -72,12 +68,10 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
     if (!agent) return
     setIsSaving(true)
     try {
-      const token = getShopToken()
       const response = await fetch(`/api/shops/${shopId}/agents/${agent.link_id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token || ""}`,
         },
         body: JSON.stringify({
           name: formData.name,
@@ -106,10 +100,8 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
     if (!window.confirm("Remove this agent from this shop and keep their sales history intact?")) return
     setIsDeleting(true)
     try {
-      const token = getShopToken()
       const response = await fetch(`/api/shops/${shopId}/agents/${agent.link_id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token || ""}` },
       })
       if (!response.ok) throw new Error("Failed to remove agent")
       onDeleted()

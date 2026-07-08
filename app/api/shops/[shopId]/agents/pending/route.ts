@@ -1,34 +1,99 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getDb } from "@/lib/db"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ shopId: string }> }) {
   try {
     const { shopId } = await params
-    const sql = getDb()
+    const supabase = await createClient()
+    const shopIdNum = Number(shopId)
 
-    const agents = await sql`
-      SELECT 
-        a.id,
-        a.name,
-        COALESCE(sales_agg.total_commission, 0) - COALESCE(payouts_agg.total_paid, 0) as pending_commission
-      FROM shop_agent_links sal
-      JOIN agents a ON sal.agent_id = a.id
-      LEFT JOIN (
-        SELECT agent_id, SUM(commission_amount) as total_commission
-        FROM sales
-        WHERE shop_id = ${Number(shopId)}
-        GROUP BY agent_id
-      ) sales_agg ON sales_agg.agent_id = a.id
-      LEFT JOIN (
-        SELECT agent_id, SUM(amount_paid) as total_paid
-        FROM payouts
-        WHERE shop_id = ${Number(shopId)} AND person_type = 'agent'
-        GROUP BY agent_id
-      ) payouts_agg ON payouts_agg.agent_id = a.id
-      WHERE sal.shop_id = ${Number(shopId)} AND sal.status = 'active'
-        AND COALESCE(sales_agg.total_commission, 0) - COALESCE(payouts_agg.total_paid, 0) > 0
-      ORDER BY a.name
-    `
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    // Get active agent links for this shop
+    const { data: links, error: linksError } = await supabase
+      .from("shop_agent_links")
+      .select("agent_id")
+      .eq("shop_id", shopIdNum)
+      .eq("status", "active")
+
+    if (linksError) {
+      const message = linksError.message
+      console.error("Error:", message)
+      return NextResponse.json({ error: "Internal server error", details: message }, { status: 500 })
+    }
+
+    if (!links || links.length === 0) {
+      return NextResponse.json({ agents: [] })
+    }
+
+    const agentIds = links.map((l: any) => l.agent_id)
+
+    // Get agent names
+    const { data: agentsData, error: agentsError } = await supabase
+      .from("agents")
+      .select("id, name")
+      .in("id", agentIds)
+
+    if (agentsError) {
+      const message = agentsError.message
+      console.error("Error:", message)
+      return NextResponse.json({ error: "Internal server error", details: message }, { status: 500 })
+    }
+
+    // Get sales commissions per agent
+    const { data: salesData, error: salesError } = await supabase
+      .from("sales")
+      .select("agent_id, commission_amount")
+      .eq("shop_id", shopIdNum)
+      .in("agent_id", agentIds)
+
+    if (salesError) {
+      const message = salesError.message
+      console.error("Error:", message)
+      return NextResponse.json({ error: "Internal server error", details: message }, { status: 500 })
+    }
+
+    // Get payouts per agent
+    const { data: payoutsData, error: payoutsError } = await supabase
+      .from("payouts")
+      .select("agent_id, amount_paid")
+      .eq("shop_id", shopIdNum)
+      .eq("person_type", "agent")
+      .in("agent_id", agentIds)
+
+    if (payoutsError) {
+      const message = payoutsError.message
+      console.error("Error:", message)
+      return NextResponse.json({ error: "Internal server error", details: message }, { status: 500 })
+    }
+
+    // Calculate totals per agent
+    const salesMap = new Map<number, number>()
+    salesData?.forEach((sale: any) => {
+      salesMap.set(sale.agent_id, (salesMap.get(sale.agent_id) || 0) + (sale.commission_amount || 0))
+    })
+
+    const payoutsMap = new Map<number, number>()
+    payoutsData?.forEach((payout: any) => {
+      payoutsMap.set(payout.agent_id, (payoutsMap.get(payout.agent_id) || 0) + (payout.amount_paid || 0))
+    })
+
+    // Build result with only positive pending
+    const agents = (agentsData || [])
+      .map((agent: any) => {
+        const totalCommission = salesMap.get(agent.id) || 0
+        const totalPaid = payoutsMap.get(agent.id) || 0
+        const pendingCommission = totalCommission - totalPaid
+
+        return {
+          id: agent.id,
+          name: agent.name,
+          pending_commission: pendingCommission,
+        }
+      })
+      .filter((agent: any) => agent.pending_commission > 0)
+      .sort((a: any, b: any) => a.name.localeCompare(b.name))
 
     return NextResponse.json({ agents })
   } catch (error) {

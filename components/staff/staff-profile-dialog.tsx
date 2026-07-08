@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loader2, Pencil, Trash2, CheckCircle2, Wallet } from "lucide-react"
-import { getShopToken } from "@/lib/storage-utils"
+import { createClient } from "@/lib/supabase/client"
 
 interface StaffProfileDialogProps {
   open: boolean
@@ -17,6 +17,7 @@ interface StaffProfileDialogProps {
 }
 
 export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdated, onDeleted }: StaffProfileDialogProps) {
+  const supabase = createClient()
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -57,16 +58,17 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
   const fetchAdvances = async () => {
     if (!staff) return
     try {
-      const token = getShopToken()
-      const response = await fetch(`/api/shops/${shopId}/payouts`, {
-        headers: { Authorization: `Bearer ${token || ""}` },
-      })
-      if (!response.ok) return
-      const data = await response.json()
-      const staffAdvances = (data.payouts || []).filter(
-        (p: any) => p.staff_id === staff.id && p.is_advance
-      )
-      setAdvances(staffAdvances)
+      const { data, error } = await supabase
+        .from("payouts")
+        .select("*")
+        .eq("shop_id", shopId)
+        .eq("person_id", staff.id)
+        .eq("person_type", "staff")
+        .eq("is_advance", true)
+        .order("payment_date", { ascending: false })
+
+      if (error) throw error
+      setAdvances(data || [])
     } catch (error) {
       console.error(error)
     }
@@ -76,15 +78,9 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
     if (!staff) return
     setIsSaving(true)
     try {
-      const token = getShopToken()
-      const response = await fetch(`/api/shops/${shopId}/staff`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token || ""}`,
-        },
-        body: JSON.stringify({
-          id: staff.id,
+      const { error } = await supabase
+        .from("staff")
+        .update({
           name: formData.name,
           phone: formData.phone,
           role: formData.role,
@@ -96,9 +92,11 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
           bank_name: formData.bank_name,
           ifsc_code: formData.ifsc_code,
           upi_id: formData.upi_id,
-        }),
-      })
-      if (!response.ok) throw new Error("Failed to update staff")
+        })
+        .eq("id", staff.id)
+        .eq("shop_id", shopId)
+
+      if (error) throw error
       onUpdated()
       onOpenChange(false)
     } catch (error) {
@@ -113,16 +111,13 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
     if (!window.confirm("Remove this staff member from the shop while keeping payroll history?")) return
     setIsDeleting(true)
     try {
-      const token = getShopToken()
-      const response = await fetch(`/api/shops/${shopId}/staff`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token || ""}`,
-        },
-        body: JSON.stringify({ id: staff.id }),
-      })
-      if (!response.ok) throw new Error("Failed to delete staff")
+      const { error } = await supabase
+        .from("staff")
+        .delete()
+        .eq("id", staff.id)
+        .eq("shop_id", shopId)
+
+      if (error) throw error
       onDeleted()
       onOpenChange(false)
     } catch (error) {

@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Receipt, QrCode, Wallet, CheckCircle2 } from "lucide-react"
 import QRCode from "qrcode"
-import { getShopToken } from "@/lib/storage-utils"
 
 interface PayrollPaymentDialogProps {
   open: boolean
@@ -118,12 +117,10 @@ export function PayrollPaymentDialog({ open, onOpenChange, shopId, salary, onPai
     if (!salary || !paymentAmount) return
     setIsLoading(true)
     try {
-      const token = getShopToken()
       const response = await fetch(`/api/shops/${shopId}/salary/${salary.id}/mark-paid`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token || ""}`,
         },
       })
       if (!response.ok) throw new Error("Failed to confirm payment")

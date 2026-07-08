@@ -2,22 +2,20 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { clearAllStorage } from "@/lib/storage-utils"
+import { createClient } from "@/lib/supabase/client"
 
 export default function LogoutPage() {
   const router = useRouter()
+  const supabase = createClient()
 
   useEffect(() => {
-    // Clear all storage
-    clearAllStorage()
-
-    // Redirect after a brief delay for visual feedback
-    const timer = setTimeout(() => {
+    const doLogout = async () => {
+      await supabase.auth.signOut()
       router.push("/")
-    }, 500)
+    }
 
-    return () => clearTimeout(timer)
-  }, [router])
+    doLogout()
+  }, [router, supabase])
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/5 to-accent/5">

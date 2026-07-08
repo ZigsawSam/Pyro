@@ -1,53 +1,107 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getDb } from "@/lib/db"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ agentId: string }> }) {
   try {
     const { agentId } = await params
-    const sql = getDb()
+    const supabase = await createClient()
 
-    // Get all shops agent works with
-    const shops = await sql`
-      SELECT 
-        s.id as shop_id,
-        s.shop_name,
-        sal.commission_rate,
-        COALESCE(sales_agg.total_sales, 0) as total_sales,
-        COALESCE(sales_agg.total_commission, 0) as total_commission,
-        COALESCE(payouts_agg.total_paid, 0) as paid_commission,
-        COALESCE(sales_agg.total_commission, 0) - COALESCE(payouts_agg.total_paid, 0) as pending_commission
-      FROM shop_agent_links sal
-      JOIN shops s ON sal.shop_id = s.id
-      LEFT JOIN (
-        SELECT shop_id, agent_id, SUM(amount) as total_sales, SUM(commission_amount) as total_commission
-        FROM sales
-        WHERE agent_id = ${Number(agentId)}
-        GROUP BY shop_id, agent_id
-      ) sales_agg ON sales_agg.shop_id = s.id AND sales_agg.agent_id = sal.agent_id
-      LEFT JOIN (
-        SELECT shop_id, agent_id, SUM(amount_paid) as total_paid
-        FROM payouts
-        WHERE agent_id = ${Number(agentId)}
-        GROUP BY shop_id, agent_id
-      ) payouts_agg ON payouts_agg.shop_id = s.id AND payouts_agg.agent_id = sal.agent_id
-      WHERE sal.agent_id = ${Number(agentId)} AND sal.status = 'active'
-      ORDER BY s.shop_name
-    `
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // Calculate totals
-    const totals = {
-      total_sales: 0,
-      total_commission: 0,
-      paid_commission: 0,
-      pending_commission: 0,
+    // Get all active shop links for this agent
+    const { data: links, error: linksError } = await supabase
+      .from("shop_agent_links")
+      .select("shop_id, commission_rate")
+      .eq("agent_id", Number(agentId))
+      .eq("status", "active")
+
+    if (linksError) {
+      console.error("Error fetching shop links:", linksError)
+      return NextResponse.json({ error: linksError.message }, { status: 500 })
     }
 
-    shops.forEach((shop: any) => {
-      totals.total_sales += shop.total_sales || 0
-      totals.total_commission += shop.total_commission || 0
-      totals.paid_commission += shop.paid_commission || 0
-      totals.pending_commission += shop.pending_commission || 0
+    if (!links || links.length === 0) {
+      return NextResponse.json({ shops: [], totals: { total_sales: 0, total_commission: 0, paid_commission: 0, pending_commission: 0 } })
+    }
+
+    const shopIds = links.map((l: any) => l.shop_id)
+
+    // Get shop names
+    const { data: shopsData, error: shopsError } = await supabase
+      .from("shops")
+      .select("id, shop_name")
+      .in("id", shopIds)
+
+    if (shopsError) {
+      console.error("Error fetching shops:", shopsError)
+      return NextResponse.json({ error: shopsError.message }, { status: 500 })
+    }
+
+    // Get sales totals per shop
+    const { data: salesData, error: salesError } = await supabase
+      .from("sales")
+      .select("shop_id, amount, commission_amount")
+      .eq("agent_id", Number(agentId))
+      .in("shop_id", shopIds)
+
+    if (salesError) {
+      console.error("Error fetching sales:", salesError)
+      return NextResponse.json({ error: salesError.message }, { status: 500 })
+    }
+
+    // Get payouts totals per shop
+    const { data: payoutsData, error: payoutsError } = await supabase
+      .from("payouts")
+      .select("shop_id, amount_paid")
+      .eq("agent_id", Number(agentId))
+      .in("shop_id", shopIds)
+
+    if (payoutsError) {
+      console.error("Error fetching payouts:", payoutsError)
+      return NextResponse.json({ error: payoutsError.message }, { status: 500 })
+    }
+
+    // Build result
+    const shopMap = new Map(shopsData?.map((s: any) => [s.id, s.shop_name]) || [])
+    const salesMap = new Map<number, { total_sales: number; total_commission: number }>()
+    const payoutsMap = new Map<number, number>()
+
+    salesData?.forEach((sale: any) => {
+      const existing = salesMap.get(sale.shop_id) || { total_sales: 0, total_commission: 0 }
+      existing.total_sales += sale.amount || 0
+      existing.total_commission += sale.commission_amount || 0
+      salesMap.set(sale.shop_id, existing)
     })
+
+    payoutsData?.forEach((payout: any) => {
+      const existing = payoutsMap.get(payout.shop_id) || 0
+      payoutsMap.set(payout.shop_id, existing + (payout.amount_paid || 0))
+    })
+
+    const shops = links.map((link: any) => {
+      const sales = salesMap.get(link.shop_id) || { total_sales: 0, total_commission: 0 }
+      const paid = payoutsMap.get(link.shop_id) || 0
+
+      return {
+        shop_id: link.shop_id,
+        shop_name: shopMap.get(link.shop_id) || "Unknown",
+        commission_rate: link.commission_rate,
+        total_sales: sales.total_sales,
+        total_commission: sales.total_commission,
+        paid_commission: paid,
+        pending_commission: sales.total_commission - paid,
+      }
+    })
+
+    shops.sort((a: any, b: any) => a.shop_name.localeCompare(b.shop_name))
+
+    const totals = {
+      total_sales: shops.reduce((sum: number, s: any) => sum + s.total_sales, 0),
+      total_commission: shops.reduce((sum: number, s: any) => sum + s.total_commission, 0),
+      paid_commission: shops.reduce((sum: number, s: any) => sum + s.paid_commission, 0),
+      pending_commission: shops.reduce((sum: number, s: any) => sum + s.pending_commission, 0),
+    }
 
     return NextResponse.json({ shops, totals })
   } catch (error) {

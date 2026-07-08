@@ -6,7 +6,6 @@ import { MainLayout } from "@/components/layout/main-layout"
 import { StatCard } from "@/components/stat-card"
 import { Card } from "@/components/ui/card"
 import { Users, TrendingUp, Clock, UserCheck } from "lucide-react"
-import { getShopToken } from "@/lib/storage-utils"
 
 interface DashboardData {
   total_sales: number
@@ -34,17 +33,7 @@ export default function ShopDashboardPage() {
 
     const fetchDashboard = async () => {
       try {
-        const token = getShopToken()
-        if (!token) {
-          setIsLoading(false)
-          return
-        }
-
-        const response = await fetch(`/api/shops/${shopId}/dashboard`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        const response = await fetch(`/api/shops/${shopId}/dashboard`)
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}))
@@ -62,7 +51,6 @@ export default function ShopDashboardPage() {
         })
         setShopName(result.shopName || "Shop Dashboard")
       } catch (error) {
-        // Set default empty state on error
         setData({
           total_sales: 0,
           pending_commission: 0,
