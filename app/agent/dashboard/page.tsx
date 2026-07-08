@@ -30,7 +30,9 @@ interface Invitation {
   commission_rate: number
   message?: string
   requested_by: string
+  status?: string
   _source?: "agent_requests" | "agent_link_requests"
+  isReceived?: boolean
 }
 
 interface LinkedShop {
@@ -101,153 +103,174 @@ export default function AgentDashboardPage() {
     checkAuth()
   }, [router, supabase])
 
-  const fetchData = async (id: number) => {
-    setLoading(true)
+const fetchData = async (id: number) => {
+  setLoading(true)
+  
+  // 1. Fetch received invitations (shop → agent)
+  let receivedInvitations: any[] = []
+  try {
+    const { data, error } = await supabase
+      .from("agent_requests")
+      .select(`id, shop_id, commission_rate, message, requested_by, status, requested_at, shops:shop_id (shop_name, city, state)`)
+      .eq("agent_id", id)
+      .eq("status", "pending")
+    
+    if (error) {
+      console.error("agent_requests error:", error)
+    } else {
+      receivedInvitations = data || []
+    }
+  } catch (e) {
+    console.error("agent_requests catch:", e)
+  }
+
+  // 2. Fetch sent requests (agent → shop)
+let sentRequests: any[] = []
+try {
+  const { data, error } = await supabase
+    .from("agent_link_requests")
+    .select(`id, shop_id, commission_rate, message, requested_by, status, requested_at`)
+    .eq("agent_id", id)
+  
+  if (error) {
+    console.error("agent_link_requests error:", error)
+    console.error("error details:", JSON.stringify(error, null, 2))
+  } else if (!data) {
+    console.error("agent_link_requests returned null data")
+  } else {
+    sentRequests = data
+    console.log("agent_link_requests data:", data)
+  }
+} catch (e) {
+  console.error("agent_link_requests catch:", e)
+}
+
+  // 3. Fetch shop names for sent requests separately
+  const shopIds = [...new Set(sentRequests.map((s) => s.shop_id))]
+  let shopMap: Record<number, any> = {}
+  if (shopIds.length > 0) {
     try {
-      // 1. Fetch shop-initiated requests (received by agent)
-      const { data: invData, error: invError } = await supabase
-        .from("agent_requests")
-        .select(`
-          id,
-          shop_id,
-          commission_rate,
-          message,
-          requested_by,
-          status,
-          requested_at,
-          shops:shop_id (shop_name, city, state)
-        `)
-        .eq("agent_id", id)
-        .eq("status", "pending")
-
-      if (invError) {
-        console.error("invError:", invError)
-        throw invError
-      }
-
-      // 2. Fetch agent-initiated requests (sent by agent)
-      const { data: sentData, error: sentError } = await supabase
-        .from("agent_link_requests")
-        .select(`
-          id,
-          shop_id,
-          commission_rate,
-          message,
-          requested_by,
-          status,
-          created_at,
-          shops:shop_id (shop_name, city, state)
-        `)
-        .eq("agent_id", id)
-
-      if (sentError) {
-        console.error("sentError:", sentError)
-        throw sentError
-      }
-
-      // 3. Merge both into invitations
-      const formattedInvitations = [
-        // Received from shops (agent can accept/reject)
-        ...(invData || []).map((inv: any) => ({
-          id: inv.id,
-          shop_id: inv.shop_id,
-          shop_name: inv.shops?.shop_name || "Unknown Shop",
-          shop_location: `${inv.shops?.city || ""}, ${inv.shops?.state || ""}`,
-          commission_rate: inv.commission_rate,
-          message: inv.message,
-          requested_by: inv.requested_by,
-          status: inv.status,
-          _source: "agent_requests" as const,
-          isReceived: true,
-        })),
-        // Sent by agent (waiting for shop response)
-        ...(sentData || []).map((s: any) => ({
-          id: s.id,
-          shop_id: s.shop_id,
-          shop_name: s.shops?.shop_name || "Unknown Shop",
-          shop_location: `${s.shops?.city || ""}, ${s.shops?.state || ""}`,
-          commission_rate: s.commission_rate,
-          message: s.message,
-          requested_by: s.requested_by,
-          status: s.status,
-          _source: "agent_link_requests" as const,
-          isReceived: false,
-        }))
-      ]
-
-      // 4. Fetch linked shops
-      const { data: shopLinks, error: linksError } = await supabase
-        .from("shop_agents")
-        .select(`
-          shop_id,
-          commission_rate,
-          shops:shop_id (shop_name)
-        `)
-        .eq("agent_id", id)
-
-      if (linksError) {
-        console.error("linksError:", linksError)
-        throw linksError
-      }
-
-      // 5. Fetch sales for commission calculation
-      const { data: salesData, error: salesError } = await supabase
-        .from("sales")
-        .select("shop_id, amount, commission_amount")
-        .eq("agent_id", id)
-
-      if (salesError) {
-        console.error("salesError:", salesError)
-        throw salesError
-      }
-
-      // 6. Fetch payouts
-      const { data: payouts, error: payoutError } = await supabase
-        .from("payouts")
-        .select("shop_id, amount_paid")
-        .eq("person_id", id)
-        .eq("person_type", "agent")
-
-      if (payoutError) {
-        console.error("payoutError:", payoutError)
-        throw payoutError
-      }
-
-      // Calculate stats
-      const shopStats = (salesData || []).reduce((acc: any, sale: any) => {
-        if (!acc[sale.shop_id]) {
-          acc[sale.shop_id] = { total_sales: 0, total_commission: 0 }
-        }
-        acc[sale.shop_id].total_sales += Number(sale.amount || 0)
-        acc[sale.shop_id].total_commission += Number(sale.commission_amount || 0)
+      const { data } = await supabase
+        .from("shops")
+        .select("id, shop_name, city, state")
+        .in("id", shopIds)
+      shopMap = (data || []).reduce((acc: any, s: any) => {
+        acc[s.id] = s
         return acc
       }, {})
-
-      const paidByShop = (payouts || []).reduce((acc: any, p: any) => {
-        acc[p.shop_id] = (acc[p.shop_id] || 0) + Number(p.amount_paid || 0)
-        return acc
-      }, {})
-
-      const formattedLinkedShops = (shopLinks || []).map((link: any) => ({
-        shop_id: link.shop_id,
-        shop_name: link.shops?.shop_name || "Unknown Shop",
-        commission_rate: link.commission_rate,
-        total_sales: shopStats[link.shop_id]?.total_sales || 0,
-        total_commission: shopStats[link.shop_id]?.total_commission || 0,
-        pending_commission: (shopStats[link.shop_id]?.total_commission || 0) - (paidByShop[link.shop_id] || 0),
-      }))
-
-      setInvitations(formattedInvitations)
-      setLinkedShops(formattedLinkedShops)
     } catch (e) {
-      console.error("fetchData error:", e)
-      // Don't silently fail - show error to user
-      alert("Failed to load dashboard data. Please refresh.")
-    } finally {
-      setLoading(false)
+      console.error("shops fetch error:", e)
     }
   }
 
+  // 4. Merge invitations
+  const formattedInvitations = [
+    ...receivedInvitations.map((inv: any) => ({
+      id: inv.id,
+      shop_id: inv.shop_id,
+      shop_name: inv.shops?.shop_name || "Unknown Shop",
+      shop_location: `${inv.shops?.city || ""}, ${inv.shops?.state || ""}`,
+      commission_rate: inv.commission_rate,
+      message: inv.message,
+      requested_by: inv.requested_by,
+      status: inv.status,
+      _source: "agent_requests" as const,
+      isReceived: true,
+    })),
+    ...sentRequests.map((s: any) => ({
+      id: s.id,
+      shop_id: s.shop_id,
+      shop_name: shopMap[s.shop_id]?.shop_name || "Unknown Shop",
+      shop_location: `${shopMap[s.shop_id]?.city || ""}, ${shopMap[s.shop_id]?.state || ""}`,
+      commission_rate: s.commission_rate,
+      message: s.message,
+      requested_by: s.requested_by,
+      status: s.status,
+      _source: "agent_link_requests" as const,
+      isReceived: false,
+    }))
+  ]
+
+  // 5. Fetch linked shops
+  let linkedShopsData: any[] = []
+  try {
+    const { data, error } = await supabase
+      .from("shop_agents")
+      .select(`shop_id, commission_rate, shops:shop_id (shop_name)`)
+      .eq("agent_id", id)
+    
+    if (error) {
+      console.error("shop_agents error:", error)
+    } else {
+      linkedShopsData = data || []
+    }
+  } catch (e) {
+    console.error("shop_agents catch:", e)
+  }
+
+  // 6. Fetch sales
+  let salesData: any[] = []
+  try {
+    const { data, error } = await supabase
+      .from("sales")
+      .select("shop_id, amount, commission_amount")
+      .eq("agent_id", id)
+    
+    if (error) {
+      console.error("sales error:", error)
+    } else {
+      salesData = data || []
+    }
+  } catch (e) {
+    console.error("sales catch:", e)
+  }
+
+  // 7. Fetch payouts
+  let payouts: any[] = []
+  try {
+    const { data, error } = await supabase
+      .from("payouts")
+      .select("shop_id, amount_paid")
+      .eq("person_id", id)
+      .eq("person_type", "agent")
+    
+    if (error) {
+      console.error("payouts error:", error)
+    } else {
+      payouts = data || []
+    }
+  } catch (e) {
+    console.error("payouts catch:", e)
+  }
+
+  // Calculate stats
+  const shopStats = salesData.reduce((acc: any, sale: any) => {
+    if (!acc[sale.shop_id]) {
+      acc[sale.shop_id] = { total_sales: 0, total_commission: 0 }
+    }
+    acc[sale.shop_id].total_sales += Number(sale.amount || 0)
+    acc[sale.shop_id].total_commission += Number(sale.commission_amount || 0)
+    return acc
+  }, {})
+
+  const paidByShop = payouts.reduce((acc: any, p: any) => {
+    acc[p.shop_id] = (acc[p.shop_id] || 0) + Number(p.amount_paid || 0)
+    return acc
+  }, {})
+
+  const formattedLinkedShops = linkedShopsData.map((link: any) => ({
+    shop_id: link.shop_id,
+    shop_name: link.shops?.shop_name || "Unknown Shop",
+    commission_rate: link.commission_rate,
+    total_sales: shopStats[link.shop_id]?.total_sales || 0,
+    total_commission: shopStats[link.shop_id]?.total_commission || 0,
+    pending_commission: (shopStats[link.shop_id]?.total_commission || 0) - (paidByShop[link.shop_id] || 0),
+  }))
+
+  setInvitations(formattedInvitations)
+  setLinkedShops(formattedLinkedShops)
+  setLoading(false)
+}
   const fetchSales = async () => {
     if (!agentId) return
     setSalesLoading(true)
@@ -389,26 +412,29 @@ export default function AgentDashboardPage() {
     }
   }
 
-    const handleInvitation = async (inviteId: number, action: "accept" | "reject") => {
+      const handleInvitation = async (inviteId: number, action: "accept" | "reject") => {
     setProcessingInvite(inviteId)
     try {
-      // Verify this is a shop-initiated request (agent can only respond to shop requests)
-      const { data: reqCheck, error: checkError } = await supabase
-        .from("agent_requests")
-        .select("requested_by")
-        .eq("id", inviteId)
-        .single()
+      // Find the invitation to determine source
+      const invitation = invitations.find((i) => i.id === inviteId)
       
-      if (checkError) throw checkError
-      
-      if (reqCheck?.requested_by === "agent") {
+      if (!invitation) {
+        alert("Invitation not found")
+        setProcessingInvite(null)
+        return
+      }
+
+      // Agent can ONLY accept/reject shop-initiated requests (received)
+      if (invitation.requested_by === "agent") {
         alert("You cannot accept or reject your own sent request. The shop must respond.")
         setProcessingInvite(null)
         return
       }
+
+      const table = invitation._source || "agent_requests"
       
       const { error } = await supabase
-        .from("agent_requests")
+        .from(table)
         .update({ status: action === "accept" ? "approved" : "rejected" })
         .eq("id", inviteId)
 
@@ -416,23 +442,28 @@ export default function AgentDashboardPage() {
 
       if (action === "accept") {
         const { data: req } = await supabase
-          .from("agent_requests")
+          .from(table)
           .select("shop_id, agent_id, commission_rate")
           .eq("id", inviteId)
           .single()
 
         if (req) {
-          await supabase.from("shop_agents").insert({
+          const { error: linkError } = await supabase.from("shop_agents").insert({
             shop_id: req.shop_id,
             agent_id: req.agent_id,
             commission_rate: req.commission_rate,
           })
+          if (linkError) throw linkError
         }
       }
 
       if (agentId) fetchData(agentId)
-    } catch (e) { alert("Action failed") }
-    finally { setProcessingInvite(null) }
+    } catch (e) {
+      console.error("handleInvitation error:", e)
+      alert("Action failed")
+    } finally {
+      setProcessingInvite(null)
+    }
   }
 
   const totalSalesAmount = Array.isArray(salesRecords) 
@@ -594,37 +625,60 @@ export default function AgentDashboardPage() {
         {invitations.length > 0 && (
           <div>
             <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-              <Clock className="h-5 w-5 text-amber-500" /> Invitations ({invitations.length})
+            <Clock className="h-5 w-5 text-amber-500" /> Requests & Invitations ({invitations.length})
             </h2>
             <div className="space-y-2">
               {invitations.map((inv) => (
-                <Card key={inv.id} className="p-4 flex items-center justify-between">
+                <Card key={`${inv._source}-${inv.id}`} className="p-4 flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{inv.shop_name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{inv.shop_name}</p>
+                      {inv.isReceived ? (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                          Received
+                        </span>
+                      ) : (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                          Sent by you
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">{inv.shop_location}</p>
                     <p className="text-sm">Commission: {inv.commission_rate}%</p>
-                  {inv.message && <p className="text-sm text-muted-foreground italic">"{inv.message}"</p>}
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {inv.requested_by === "agent" ? "Sent by you" : "Received from shop"}
-                  </p>
+                    {inv.message && <p className="text-sm text-muted-foreground italic">"{inv.message}"</p>}
                   </div>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleInvitation(inv.id, "reject")}
-                      disabled={processingInvite === inv.id}
-                    >
-                      <XCircle className="h-4 w-4 mr-1" /> Decline
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleInvitation(inv.id, "accept")}
-                      disabled={processingInvite === inv.id}
-                    >
-                      {processingInvite === inv.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
-                      Accept
-                    </Button>
+                    {inv.status === "pending" ? (
+                      inv.isReceived ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleInvitation(inv.id, "reject")}
+                            disabled={processingInvite === inv.id}
+                          >
+                            <XCircle className="h-4 w-4 mr-1" /> Decline
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleInvitation(inv.id, "accept")}
+                            disabled={processingInvite === inv.id}
+                          >
+                            {processingInvite === inv.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                            Accept
+                          </Button>
+                        </>
+                      ) : (
+                        <span className="text-sm text-blue-600 flex items-center gap-1">
+                          <Clock className="h-4 w-4" /> Waiting for shop
+                        </span>
+                      )
+                    ) : (
+                      <span className={`text-sm flex items-center gap-1 ${inv.status === "approved" ? "text-green-600" : "text-red-600"}`}>
+                        {inv.status === "approved" ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                        {inv.status}
+                      </span>
+                    )}
                   </div>
                 </Card>
               ))}
