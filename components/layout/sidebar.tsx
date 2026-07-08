@@ -130,9 +130,6 @@ export function Sidebar({ shopId, isAgent = false, userName }: SidebarProps) {
           </Link>
         </div>
       </aside>
-
-      {/* Main content margin */}
-      <div className="lg:ml-64" />
     </>
   )
 }
