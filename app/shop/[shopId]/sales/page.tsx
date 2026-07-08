@@ -15,6 +15,7 @@ interface Sale {
   agent_name: string
   amount: number
   commission_amount: number
+  commission_rate?: number  // ADD THIS
   sale_date: string
   notes: string
 }
@@ -36,6 +37,7 @@ export default function ShopSalesPage() {
     agent_id: "",
     amount: "",
     commission_amount: "",
+    commission_rate: "",
     sale_date: new Date().toISOString().split("T")[0],
     notes: "",
   })
@@ -47,19 +49,8 @@ export default function ShopSalesPage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      // Fetch agents for dropdown
-      const { data: agentsData } = await supabase
-        .from("shop_agents")
-        .select("agent_id, commission_rate, agents:agent_id(id, name)")
-        .eq("shop_id", shopId)
 
-      const formattedAgents = (agentsData || []).map((a: any) => ({
-        id: a.agent_id,
-        name: a.agents?.name || "Unknown",
-      }))
-      setAgents(formattedAgents)
-
-      // Fetch sales
+           // Fetch sales
       const { data: salesData, error } = await supabase
         .from("sales")
         .select("*, agents:agent_id(name)")
@@ -67,6 +58,17 @@ export default function ShopSalesPage() {
         .order("sale_date", { ascending: false })
 
       if (error) throw error
+
+      const { data: linkedAgents } = await supabase
+        .from("shop_agents")
+        .select("agent_id, commission_rate, agents:agent_id(id, name)")
+        .eq("shop_id", shopId)
+
+      setAgents((linkedAgents || []).map((la: any) => ({
+         id: la.agent_id,
+        name: la.agents?.name || "Unknown",
+        commission_rate: la.commission_rate,
+      })))
 
       const formattedSales = (salesData || []).map((s: any) => ({
         id: s.id,
@@ -93,6 +95,7 @@ export default function ShopSalesPage() {
         agent_id: Number(newSale.agent_id),
         amount: Number(newSale.amount),
         commission_amount: Number(newSale.commission_amount),
+        commission_rate: Number(newSale.commission_rate), // Snapshot of rate used
         sale_date: newSale.sale_date,
         notes: newSale.notes,
       })
@@ -103,6 +106,7 @@ export default function ShopSalesPage() {
         agent_id: "",
         amount: "",
         commission_amount: "",
+        commission_rate: "",
         sale_date: new Date().toISOString().split("T")[0],
         notes: "",
       })
@@ -113,6 +117,30 @@ export default function ShopSalesPage() {
       alert("Failed to add sale")
     }
   }
+
+  const handleAmountChange = (amount: string) => {
+  const agent = agents.find(a => a.id === Number(newSale.agent_id))
+  const rate = agent?.commission_rate || 0
+  const commission = Number(amount) * (rate / 100)
+  setNewSale({
+    ...newSale,
+    amount,
+    commission_amount: commission.toFixed(2),
+    commission_rate: String(rate),
+  })
+}
+
+const handleAgentChange = (agentId: string) => {
+  const agent = agents.find(a => a.id === Number(agentId))
+  const rate = agent?.commission_rate || 0
+  const commission = Number(newSale.amount) * (rate / 100)
+  setNewSale({
+    ...newSale,
+    agent_id: agentId,
+    commission_rate: String(rate),
+    commission_amount: newSale.amount ? commission.toFixed(2) : "",
+  })
+}
 
   return (
     <MainLayout title="Sales" shopId={shopId}>
@@ -128,17 +156,30 @@ export default function ShopSalesPage() {
           <h3 className="font-semibold">Record New Sale</h3>
           <div className="grid gap-3 md:grid-cols-2">
             <select
-              value={newSale.agent_id}
-              onChange={(e) => setNewSale({...newSale, agent_id: e.target.value})}
-              className="w-full rounded border border-input bg-background px-3 py-2"
-            >
+  value={newSale.agent_id}
+  onChange={(e) => handleAgentChange(e.target.value)}
+  className="w-full rounded border border-input bg-background px-3 py-2"
+>
               <option value="">Select Agent</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
+              {agents.map((a: any) => (
+  <option key={a.id} value={a.id}>
+    {a.name} ({a.commission_rate}% commission)
+  </option>
+))}
             </select>
-            <Input type="number" placeholder="Sale Amount" value={newSale.amount} onChange={(e) => setNewSale({...newSale, amount: e.target.value})} />
-            <Input type="number" placeholder="Commission Amount" value={newSale.commission_amount} onChange={(e) => setNewSale({...newSale, commission_amount: e.target.value})} />
+            <Input 
+  type="number" 
+  placeholder="Sale Amount" 
+  value={newSale.amount} 
+  onChange={(e) => handleAmountChange(e.target.value)} 
+/>
+            <Input 
+  type="number" 
+  placeholder="Commission Amount" 
+  value={newSale.commission_amount} 
+  readOnly 
+  className="bg-muted"
+/>
             <Input type="date" value={newSale.sale_date} onChange={(e) => setNewSale({...newSale, sale_date: e.target.value})} />
             <Input placeholder="Notes" value={newSale.notes} onChange={(e) => setNewSale({...newSale, notes: e.target.value})} className="md:col-span-2" />
           </div>
