@@ -1,16 +1,18 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"  // ← ADD useParams
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Users, DollarSign, TrendingUp, Calendar } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { MainLayout } from "@/components/layout/main-layout"
 
-export default function ShopDashboardPage({ params }: { params: { shopId: string } }) {
+// REMOVE params from props — use useParams() instead
+export default function ShopDashboardPage() {
   const router = useRouter()
+  const params = useParams()  // ← GET params from hook
   const supabase = createClient()
-  const shopId = Number(params.shopId)
+  const shopId = Number(params?.shopId)  // ← EXTRACT from params object
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
     totalAgents: 0,
@@ -22,6 +24,7 @@ export default function ShopDashboardPage({ params }: { params: { shopId: string
   })
 
   useEffect(() => {
+    if (!shopId || isNaN(shopId)) return  // ← GUARD against invalid shopId
     fetchDashboardData()
   }, [shopId])
 
@@ -60,6 +63,15 @@ export default function ShopDashboardPage({ params }: { params: { shopId: string
     }
   }
 
+  // Guard: if shopId is invalid, don't render MainLayout yet
+  if (!shopId || isNaN(shopId)) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <MainLayout title="Dashboard" shopId={shopId}>
@@ -72,8 +84,10 @@ export default function ShopDashboardPage({ params }: { params: { shopId: string
 
   return (
     <MainLayout title="Dashboard" shopId={shopId}>
+      {/* ... rest of your JSX stays exactly the same ... */}
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {/* ... all your Cards ... */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
