@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loader2, AlertCircle } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 interface AddAgentDialogProps {
   open: boolean
@@ -14,6 +15,7 @@ interface AddAgentDialogProps {
 }
 
 export function AddAgentDialog({ open, onOpenChange, onAgentAdded, shopId }: AddAgentDialogProps) {
+  const supabase = createClient()
   const [activeTab, setActiveTab] = useState<"new" | "existing">("new")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
@@ -40,10 +42,10 @@ export function AddAgentDialog({ open, onOpenChange, onAgentAdded, shopId }: Add
     setIsLoading(true)
 
     try {
-      const response = await fetch("/api/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // 1. Create agent in agents table
+      const { data: agent, error: agentError } = await supabase
+        .from("agents")
+        .insert({
           name: newAgent.name,
           phone_number: newAgent.phone_number,
           description: newAgent.description,
@@ -52,29 +54,25 @@ export function AddAgentDialog({ open, onOpenChange, onAgentAdded, shopId }: Add
           bank_name: newAgent.bank_name,
           ifsc_code: newAgent.ifsc_code,
           upi_id: newAgent.upi_id,
-        }),
-      })
+        })
+        .select("id")
+        .single()
 
-      if (!response.ok) {
-        const data = await response.json()
-        setError(data.error || "Failed to create agent")
+      if (agentError) {
+        setError(agentError.message || "Failed to create agent")
         return
       }
 
-      const agent = await response.json()
-
-      const linkResponse = await fetch(`/api/shops/${shopId}/agents`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // 2. Link agent to shop
+      const { error: linkError } = await supabase
+        .from("shop_agents")
+        .insert({
+          shop_id: shopId,
           agent_id: agent.id,
           commission_rate: Number.parseFloat(newAgent.commission_rate),
-        }),
-      })
+        })
 
-      if (!linkResponse.ok) throw new Error("Failed to link agent")
+      if (linkError) throw new Error(linkError.message)
 
       onOpenChange(false)
       onAgentAdded()
@@ -89,8 +87,8 @@ export function AddAgentDialog({ open, onOpenChange, onAgentAdded, shopId }: Add
         ifsc_code: "",
         upi_id: "",
       })
-    } catch (err) {
-      setError("An error occurred")
+    } catch (err: any) {
+      setError(err.message || "An error occurred")
       console.error(err)
     } finally {
       setIsLoading(false)
@@ -102,42 +100,51 @@ export function AddAgentDialog({ open, onOpenChange, onAgentAdded, shopId }: Add
     setIsLoading(true)
 
     try {
-      const searchResponse = await fetch(`/api/agents?phone=${existingAgent.phone_number}`)
+      // 1. Search for existing agent by phone
+      const { data: agents, error: searchError } = await supabase
+        .from("agents")
+        .select("id, name, phone_number")
+        .eq("phone_number", existingAgent.phone_number)
+        .limit(1)
 
-      if (!searchResponse.ok) {
-        setError("Agent not found")
-        return
-      }
-
-      const agents = await searchResponse.json()
-      if (agents.length === 0) {
+      if (searchError || !agents || agents.length === 0) {
         setError("No agent found with this phone number")
+        setIsLoading(false)
         return
       }
 
       const agent = agents[0]
 
-      const linkResponse = await fetch(`/api/shops/${shopId}/agents`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // 2. Check if already linked
+      const { data: existingLink } = await supabase
+        .from("shop_agents")
+        .select("id")
+        .eq("shop_id", shopId)
+        .eq("agent_id", agent.id)
+        .single()
+
+      if (existingLink) {
+        setError("This agent is already linked to your shop")
+        setIsLoading(false)
+        return
+      }
+
+      // 3. Link agent to shop
+      const { error: linkError } = await supabase
+        .from("shop_agents")
+        .insert({
+          shop_id: shopId,
           agent_id: agent.id,
           commission_rate: Number.parseFloat(existingAgent.commission_rate),
-        }),
-      })
+        })
 
-      if (!linkResponse.ok) {
-        const errData = await linkResponse.json().catch(() => ({}))
-        throw new Error(errData.error || "Failed to link agent")
-      }
+      if (linkError) throw new Error(linkError.message)
 
       onOpenChange(false)
       onAgentAdded()
       setExistingAgent({ phone_number: "", commission_rate: "" })
-    } catch (err) {
-      setError("An error occurred")
+    } catch (err: any) {
+      setError(err.message || "An error occurred")
       console.error(err)
     } finally {
       setIsLoading(false)

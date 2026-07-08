@@ -1,11 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Loader2, Store, Clock, CheckCircle, XCircle } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 interface Shop {
   id: number
@@ -25,6 +27,8 @@ interface Request {
 }
 
 export default function AgentShopsPage() {
+  const router = useRouter()
+  const supabase = createClient()
   const [shops, setShops] = useState<Shop[]>([])
   const [myRequests, setMyRequests] = useState<Request[]>([])
   const [search, setSearch] = useState("")
@@ -33,46 +37,139 @@ export default function AgentShopsPage() {
   const [commissionRate, setCommissionRate] = useState("")
   const [message, setMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  
-  // Get agentId from your auth context/storage
-  const agentId = 1 // Replace with actual
+  const [agentId, setAgentId] = useState<number | null>(null)
 
-  useEffect(() => { fetchData() }, [search])
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push("/auth/agent-login")
+        return
+      }
+      const { data: agent } = await supabase
+        .from("agents")
+        .select("id")
+        .eq("user_id", user.id)
+        .single()
+      
+      if (!agent) {
+        router.push("/auth/agent-login")
+        return
+      }
+      setAgentId(agent.id)
+      fetchData(agent.id)
+    }
+    init()
+  }, [search])
 
-  const fetchData = async () => {
+  const fetchData = async (id: number) => {
     setLoading(true)
     try {
-      const [shopsRes, reqRes] = await Promise.all([
-        fetch(`/api/agent/shops?agentId=${agentId}&search=${encodeURIComponent(search)}`),
-        fetch(`/api/agent/link-requests?agentId=${agentId}`)
-      ])
-      const shopsData = await shopsRes.json()
-      const reqData = await reqRes.json()
-      setShops(shopsData.shops || [])
-      setMyRequests(reqData.requests || [])
+      // Fetch my requests
+      const { data: reqData, error: reqError } = await supabase
+        .from("agent_link_requests")
+        .select(`
+          id,
+          shop_id,
+          commission_rate,
+          status,
+          requested_at,
+          shops:shop_id (shop_name, city, state)
+        `)
+        .eq("agent_id", id)
+
+      if (reqError) throw reqError
+
+      const formattedRequests = (reqData || []).map((req: any) => ({
+        id: req.id,
+        shop_name: req.shops?.shop_name || "Unknown Shop",
+        shop_location: `${req.shops?.city || ""}, ${req.shops?.state || ""}`,
+        status: req.status,
+        commission_rate: req.commission_rate,
+        requested_at: req.requested_at,
+      }))
+      setMyRequests(formattedRequests)
+
+      // Fetch shops search results
+      if (search.trim()) {
+        const { data: shopsData, error: shopsError } = await supabase
+          .from("shops")
+          .select("id, shop_name, city, state")
+          .or(`shop_name.ilike.%${search}%,city.ilike.%${search}%`)
+          .limit(20)
+
+        if (shopsError) throw shopsError
+
+        // Check existing links/requests
+        const { data: existingLinks } = await supabase
+          .from("shop_agents")
+          .select("shop_id")
+          .eq("agent_id", id)
+
+        const { data: pendingRequests } = await supabase
+          .from("agent_link_requests")
+          .select("shop_id, commission_rate")
+          .eq("agent_id", id)
+          .eq("status", "pending")
+
+        const linkedIds = new Set((existingLinks || []).map((l: any) => l.shop_id))
+        const pendingMap = new Map((pendingRequests || []).map((r: any) => [r.shop_id, r.commission_rate]))
+
+        const formattedShops = (shopsData || []).map((shop: any) => {
+          if (linkedIds.has(shop.id)) {
+            return { id: shop.id, name: shop.shop_name, location: `${shop.city}, ${shop.state}`, connection_status: "linked" as const }
+          }
+          const pendingRate = pendingMap.get(shop.id)
+          if (pendingRate !== undefined) {
+            return { id: shop.id, name: shop.shop_name, location: `${shop.city}, ${shop.state}`, connection_status: "pending" as const, requested_rate: pendingRate }
+          }
+          return { id: shop.id, name: shop.shop_name, location: `${shop.city}, ${shop.state}`, connection_status: "available" as const }
+        })
+
+        setShops(formattedShops)
+      } else {
+        setShops([])
+      }
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }
 
   const handleRequest = async () => {
-    if (!selectedShop || !commissionRate) return
+    if (!selectedShop || !commissionRate || !agentId) return
     setSubmitting(true)
     try {
-      const res = await fetch("/api/agent/link-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // Check for existing pending request
+      const { data: existing } = await supabase
+        .from("agent_link_requests")
+        .select("id")
+        .eq("agent_id", agentId)
+        .eq("shop_id", selectedShop.id)
+        .eq("status", "pending")
+        .single()
+
+      if (existing) {
+        alert("You already have a pending request for this shop")
+        setSubmitting(false)
+        return
+      }
+
+      const { error } = await supabase
+        .from("agent_link_requests")
+        .insert({
           agent_id: agentId,
           shop_id: selectedShop.id,
           commission_rate: Number(commissionRate),
-          message
+          message,
+          status: "pending",
+          requested_by: "agent",
         })
-      })
-      if (!res.ok) throw new Error("Failed")
+
+      if (error) throw error
+
       setSelectedShop(null)
       setCommissionRate("")
       setMessage("")
-      fetchData()
+      if (agentId) fetchData(agentId)
     } catch (e) { alert("Failed to send request") }
     finally { setSubmitting(false) }
   }

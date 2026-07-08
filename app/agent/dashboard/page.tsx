@@ -102,14 +102,88 @@ export default function AgentDashboardPage() {
   const fetchData = async (id: number) => {
     setLoading(true)
     try {
-      const [invRes, shopsRes] = await Promise.all([
-        fetch(`/api/agents/invitations?agentId=${id}`),
-        fetch(`/api/agents/linked-shops?agentId=${id}`),
-      ])
-      const invData = await invRes.json()
-      const shopsData = await shopsRes.json()
-      setInvitations(invData.invitations || [])
-      setLinkedShops(shopsData.shops || [])
+      // Fetch invitations (agent_requests where agent is the target)
+      const { data: invData, error: invError } = await supabase
+        .from("agent_requests")
+        .select(`
+          id,
+          shop_id,
+          commission_rate,
+          message,
+          requested_by,
+          status,
+          shops:shop_id (shop_name, city, state)
+        `)
+        .eq("agent_id", id)
+        .eq("status", "pending")
+
+      if (invError) throw invError
+
+      const formattedInvitations = (invData || []).map((inv: any) => ({
+        id: inv.id,
+        shop_id: inv.shop_id,
+        shop_name: inv.shops?.shop_name || "Unknown Shop",
+        shop_location: `${inv.shops?.city || ""}, ${inv.shops?.state || ""}`,
+        commission_rate: inv.commission_rate,
+        message: inv.message,
+        requested_by: inv.requested_by,
+      }))
+
+      // Fetch linked shops via shop_agents
+      const { data: shopLinks, error: linksError } = await supabase
+        .from("shop_agents")
+        .select(`
+          shop_id,
+          commission_rate,
+          shops:shop_id (shop_name)
+        `)
+        .eq("agent_id", id)
+
+      if (linksError) throw linksError
+
+      // Fetch sales data for each linked shop to calculate totals
+      const { data: salesData, error: salesError } = await supabase
+        .from("sales")
+        .select("shop_id, amount, commission_amount")
+        .eq("agent_id", id)
+
+      if (salesError) throw salesError
+
+      // Calculate totals per shop
+      const shopStats = (salesData || []).reduce((acc: any, sale: any) => {
+        if (!acc[sale.shop_id]) {
+          acc[sale.shop_id] = { total_sales: 0, total_commission: 0 }
+        }
+        acc[sale.shop_id].total_sales += Number(sale.amount || 0)
+        acc[sale.shop_id].total_commission += Number(sale.commission_amount || 0)
+        return acc
+      }, {})
+
+      // Fetch payouts for pending calculation
+      const { data: payouts, error: payoutError } = await supabase
+        .from("payouts")
+        .select("shop_id, amount_paid")
+        .eq("person_id", id)
+        .eq("person_type", "agent")
+
+      if (payoutError) throw payoutError
+
+      const paidByShop = (payouts || []).reduce((acc: any, p: any) => {
+        acc[p.shop_id] = (acc[p.shop_id] || 0) + Number(p.amount_paid || 0)
+        return acc
+      }, {})
+
+      const formattedLinkedShops = (shopLinks || []).map((link: any) => ({
+        shop_id: link.shop_id,
+        shop_name: link.shops?.shop_name || "Unknown Shop",
+        commission_rate: link.commission_rate,
+        total_sales: shopStats[link.shop_id]?.total_sales || 0,
+        total_commission: shopStats[link.shop_id]?.total_commission || 0,
+        pending_commission: (shopStats[link.shop_id]?.total_commission || 0) - (paidByShop[link.shop_id] || 0),
+      }))
+
+      setInvitations(formattedInvitations)
+      setLinkedShops(formattedLinkedShops)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }
@@ -118,14 +192,44 @@ export default function AgentDashboardPage() {
     if (!agentId) return
     setSalesLoading(true)
     try {
-      let url = `/api/agents/sales?agentId=${agentId}`
-      if (salesFilterShop !== "all") url += `&shopId=${salesFilterShop}`
-      if (salesDateFrom) url += `&from=${salesDateFrom}`
-      if (salesDateTo) url += `&to=${salesDateTo}`
-      
-      const res = await fetch(url)
-      const data = await res.json()
-      setSalesRecords(Array.isArray(data.sales) ? data.sales : [])
+      let query = supabase
+        .from("sales")
+        .select(`
+          id,
+          shop_id,
+          amount,
+          commission_amount,
+          sale_date,
+          notes,
+          shops:shop_id (shop_name)
+        `)
+        .eq("agent_id", agentId)
+
+      if (salesFilterShop !== "all") {
+        query = query.eq("shop_id", salesFilterShop)
+      }
+      if (salesDateFrom) {
+        query = query.gte("sale_date", salesDateFrom)
+      }
+      if (salesDateTo) {
+        query = query.lte("sale_date", salesDateTo)
+      }
+
+      const { data, error } = await query.order("sale_date", { ascending: false })
+
+      if (error) throw error
+
+      const formattedSales = (data || []).map((sale: any) => ({
+        id: sale.id,
+        shop_id: sale.shop_id,
+        shop_name: sale.shops?.shop_name || "Unknown Shop",
+        amount: sale.amount,
+        commission_amount: sale.commission_amount,
+        sale_date: sale.sale_date,
+        notes: sale.notes,
+      }))
+
+      setSalesRecords(formattedSales)
     } catch (e) { 
       console.error(e)
       setSalesRecords([])
@@ -144,9 +248,42 @@ export default function AgentDashboardPage() {
     if (!searchQuery.trim() || !agentId) return
     setSearching(true)
     try {
-      const res = await fetch(`/api/agents/shops?agentId=${agentId}&search=${encodeURIComponent(searchQuery)}`)
-      const data = await res.json()
-      setSearchResults(data.shops || [])
+      // Search shops by name, owner, or phone
+      const { data: shops, error } = await supabase
+        .from("shops")
+        .select("id, shop_name, owner_name, phone, city, state")
+        .or(`shop_name.ilike.%${searchQuery}%,owner_name.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%`)
+        .limit(20)
+
+      if (error) throw error
+
+      // Check which shops are already linked or have pending requests
+      const { data: existingLinks } = await supabase
+        .from("shop_agents")
+        .select("shop_id")
+        .eq("agent_id", agentId)
+
+      const { data: pendingRequests } = await supabase
+        .from("agent_link_requests")
+        .select("shop_id, commission_rate, id")
+        .eq("agent_id", agentId)
+        .eq("status", "pending")
+
+      const linkedShopIds = new Set((existingLinks || []).map((l: any) => l.shop_id))
+      const pendingMap = new Map((pendingRequests || []).map((r: any) => [r.shop_id, r]))
+
+      const formattedResults = (shops || []).map((shop: any) => {
+        if (linkedShopIds.has(shop.id)) {
+          return { ...shop, name: shop.shop_name, location: `${shop.city}, ${shop.state}`, connection_status: "linked" as const }
+        }
+        const pending = pendingMap.get(shop.id)
+        if (pending) {
+          return { ...shop, name: shop.shop_name, location: `${shop.city}, ${shop.state}`, connection_status: "pending" as const, requested_rate: pending.commission_rate, request_id: pending.id }
+        }
+        return { ...shop, name: shop.shop_name, location: `${shop.city}, ${shop.state}`, connection_status: "available" as const }
+      })
+
+      setSearchResults(formattedResults)
     } catch (e) { console.error(e) }
     finally { setSearching(false) }
   }
@@ -155,24 +292,33 @@ export default function AgentDashboardPage() {
     if (!selectedShop || !requestRate || !agentId) return
     setSubmitting(true)
     try {
-      const res = await fetch("/api/agents/link-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // Check if request already exists
+      const { data: existing } = await supabase
+        .from("agent_link_requests")
+        .select("id")
+        .eq("agent_id", agentId)
+        .eq("shop_id", selectedShop.id)
+        .eq("status", "pending")
+        .single()
+
+      if (existing) {
+        alert("You already have a pending request for this shop")
+        setSubmitting(false)
+        return
+      }
+
+      const { error } = await supabase
+        .from("agent_link_requests")
+        .insert({
           agent_id: agentId,
           shop_id: selectedShop.id,
           commission_rate: Number(requestRate),
           message: requestMessage,
-        }),
-      })
-      
-      if (res.status === 409) {
-        const data = await res.json()
-        alert(data.error || "Already requested")
-        return
-      }
-      
-      if (!res.ok) throw new Error("Failed")
+          status: "pending",
+          requested_by: "agent",
+        })
+
+      if (error) throw error
       
       setSelectedShop(null)
       setRequestRate("")
@@ -189,12 +335,30 @@ export default function AgentDashboardPage() {
   const handleInvitation = async (inviteId: number, action: "accept" | "reject") => {
     setProcessingInvite(inviteId)
     try {
-      const res = await fetch("/api/agents/invitations", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ request_id: inviteId, action }),
-      })
-      if (!res.ok) throw new Error("Failed")
+      const { error } = await supabase
+        .from("agent_requests")
+        .update({ status: action === "accept" ? "approved" : "rejected" })
+        .eq("id", inviteId)
+
+      if (error) throw error
+
+      if (action === "accept") {
+        // Get the request details to create the shop_agent link
+        const { data: req } = await supabase
+          .from("agent_requests")
+          .select("shop_id, agent_id, commission_rate")
+          .eq("id", inviteId)
+          .single()
+
+        if (req) {
+          await supabase.from("shop_agents").insert({
+            shop_id: req.shop_id,
+            agent_id: req.agent_id,
+            commission_rate: req.commission_rate,
+          })
+        }
+      }
+
       if (agentId) fetchData(agentId)
     } catch (e) { alert("Action failed") }
     finally { setProcessingInvite(null) }
