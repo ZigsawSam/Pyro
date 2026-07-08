@@ -18,6 +18,7 @@ interface AgentRequest {
   status: string
   requested_by: string
   requested_at: string
+  _source?: "agent_requests" | "agent_link_requests"
 }
 
 export default function AgentRequestsPage() {
@@ -35,14 +36,28 @@ export default function AgentRequestsPage() {
   const fetchRequests = async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from("agent_requests")
-        .select("*")
-        .eq("shop_id", shopId)
-        .order("requested_at", { ascending: false })
+      const [{ data: shopRequests, error: shopError }, { data: agentRequests, error: agentError }] = await Promise.all([
+        supabase
+          .from("agent_requests")
+          .select("*")
+          .eq("shop_id", shopId)
+          .order("requested_at", { ascending: false }),
+        supabase
+          .from("agent_link_requests")
+          .select("*")
+          .eq("shop_id", shopId)
+          .order("created_at", { ascending: false })
+      ])
 
-      if (error) throw error
-      setRequests(data || [])
+      if (shopError) throw shopError
+      if (agentError) throw agentError
+
+      const merged = [
+        ...(shopRequests || []).map((r: any) => ({ ...r, _source: "agent_requests" as const })),
+        ...(agentRequests || []).map((r: any) => ({ ...r, _source: "agent_link_requests" as const, requested_at: r.created_at }))
+      ].sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime())
+
+      setRequests(merged)
     } catch (e) {
       console.error(e)
     } finally {
@@ -52,8 +67,10 @@ export default function AgentRequestsPage() {
 
   const handleAction = async (requestId: number, action: "approved" | "rejected") => {
     try {
+      const request = requests.find((r) => r.id === requestId)
+      const table = request?._source || "agent_requests"
       const { error } = await supabase
-        .from("agent_requests")
+        .from(table)
         .update({ status: action, responded_at: new Date().toISOString() })
         .eq("id", requestId)
         .eq("shop_id", shopId)
