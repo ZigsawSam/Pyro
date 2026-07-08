@@ -1,5 +1,6 @@
 "use client"
 
+import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,9 +24,10 @@ interface Agent {
   name: string
 }
 
-export default function ShopSalesPage({ params }: { params: { shopId: string } }) {
+export default function ShopSalesPage() {
   const supabase = createClient()
-  const shopId = Number(params.shopId)
+  const params = useParams()
+  const shopId = Number(params?.shopId)
   const [sales, setSales] = useState<Sale[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)

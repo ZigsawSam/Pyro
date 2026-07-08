@@ -1,5 +1,6 @@
 "use client"
 
+import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,9 +22,10 @@ interface SalaryRecord {
   paid_at: string | null
 }
 
-export default function ShopSalaryPage({ params }: { params: { shopId: string } }) {
+export default function ShopSalaryPage() {
   const supabase = createClient()
-  const shopId = Number(params.shopId)
+  const params = useParams()
+  const shopId = Number(params?.shopId)
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
   const [salaryRecords, setSalaryRecords] = useState<SalaryRecord[]>([])
   const [loading, setLoading] = useState(true)

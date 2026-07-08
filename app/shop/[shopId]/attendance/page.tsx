@@ -1,5 +1,6 @@
 "use client"
 
+import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,9 +18,10 @@ interface StaffAttendance {
   notes: string
 }
 
-export default function ShopAttendancePage({ params }: { params: { shopId: string } }) {
+export default function ShopAttendancePage() {
   const supabase = createClient()
-  const shopId = Number(params.shopId)
+  const params = useParams()
+  const shopId = Number(params?.shopId)
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
   const [staff, setStaff] = useState<StaffAttendance[]>([])
   const [loading, setLoading] = useState(true)

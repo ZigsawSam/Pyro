@@ -1,5 +1,6 @@
 "use client"
 
+import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,9 +20,10 @@ interface Payout {
   is_advance: boolean
 }
 
-export default function ShopPayoutsPage({ params }: { params: { shopId: string } }) {
+export default function ShopPayoutsPage() {
   const supabase = createClient()
-  const shopId = Number(params.shopId)
+  const params = useParams()
+  const shopId = Number(params?.shopId)
   const [payouts, setPayouts] = useState<Payout[]>([])
   const [agents, setAgents] = useState<{id: number, name: string}[]>([])
   const [staff, setStaff] = useState<{id: number, name: string}[]>([])
