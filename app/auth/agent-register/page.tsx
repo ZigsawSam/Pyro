@@ -2,12 +2,15 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
+import { Loader2 } from "lucide-react"
 
 export default function AgentRegisterPage() {
   const router = useRouter()
+  const supabase = createClient()
   const [formData, setFormData] = useState({
     name: "",
     phoneNumber: "",
@@ -39,24 +42,64 @@ export default function AgentRegisterPage() {
         return
       }
 
-      const response = await fetch("/api/auth/agent-register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+      // 1. Generate a fake email from phone number (agents log in with phone + password)
+      const agentEmail = `${formData.phoneNumber}@agent.local`
+
+      // 2. Sign up with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: agentEmail,
+        password: formData.phoneNumber, // use phone as initial password
+        options: {
+          data: {
+            role: "agent",
+            name: formData.name,
+            phone: formData.phoneNumber,
+          },
+        },
       })
 
-      if (!response.ok) {
-        const data = await response.json()
-        setError(data.error || "Registration failed")
+      if (authError || !authData.user) {
+        setError(authError?.message || "Registration failed")
         setIsLoading(false)
         return
       }
 
-      const data = await response.json()
-      localStorage.setItem("agent_session", JSON.stringify(data.agent))
-      localStorage.setItem("agent_token", data.token || "")
+      // 3. Sign in immediately to get active session (for RLS)
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: agentEmail,
+        password: formData.phoneNumber,
+      })
 
-      await new Promise(resolve => setTimeout(resolve, 300))
+      if (signInError) {
+        setError("Account created but auto-login failed. Please log in.")
+        setIsLoading(false)
+        router.push("/auth/agent-login")
+        return
+      }
+
+      // 4. Insert agent profile
+      const { data: agent, error: dbError } = await supabase
+        .from("agents")
+        .insert({
+          user_id: authData.user.id,
+          name: formData.name,
+          phone_number: formData.phoneNumber,
+          account_name: formData.accountName,
+          account_number: formData.accountNumber,
+          bank_name: formData.bankName,
+          ifsc_code: formData.ifscCode,
+          upi_id: formData.upiId,
+        })
+        .select("id")
+        .single()
+
+      if (dbError) {
+        setError(dbError.message)
+        setIsLoading(false)
+        return
+      }
+
+      // 5. Redirect to agent dashboard
       router.push("/agent/dashboard")
     } catch (err) {
       setError("An error occurred. Please try again.")
@@ -158,6 +201,7 @@ export default function AgentRegisterPage() {
           </div>
 
           <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
             {isLoading ? "Creating..." : "Create Agent Account"}
           </Button>
         </form>
