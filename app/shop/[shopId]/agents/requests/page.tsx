@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Loader2, CheckCircle, XCircle, Clock } from "lucide-react"
+import { Loader2, CheckCircle, XCircle, Clock, Send, Inbox } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { MainLayout } from "@/components/layout/main-layout"
 
@@ -68,6 +68,13 @@ export default function AgentRequestsPage() {
   const handleAction = async (requestId: number, action: "approved" | "rejected") => {
     try {
       const request = requests.find((r) => r.id === requestId)
+
+    
+      if (request?.requested_by === "shop") {
+        alert("You cannot accept or reject your own sent request. The agent must respond.")
+        return
+      }
+
       const table = request?._source || "agent_requests"
       const { error } = await supabase
         .from(table)
@@ -104,38 +111,63 @@ export default function AgentRequestsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {requests.map((req) => (
-            <Card key={req.id} className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold">{req.agent_name}</p>
-                  <p className="text-sm text-muted-foreground">{req.agent_phone}</p>
-                  <p className="text-sm">Rate: {req.commission_rate}%</p>
-                  {req.message && <p className="text-sm text-muted-foreground italic">"{req.message}"</p>}
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {req.requested_by === "shop" ? "Sent by you" : "Received"} • {new Date(req.requested_at).toLocaleDateString()}
-                  </p>
+          {requests.map((req) => {
+            const isSentByShop = req.requested_by === "shop"
+            const isReceived = req.requested_by === "agent"
+            
+            return (
+              <Card key={`${req._source}-${req.id}`} className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold">{req.agent_name}</p>
+                      {isSentByShop && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Send className="h-3 w-3" /> Sent by you
+                        </span>
+                      )}
+                      {isReceived && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Inbox className="h-3 w-3" /> Received
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{req.agent_phone}</p>
+                    <p className="text-sm">Rate: {req.commission_rate}%</p>
+                    {req.message && <p className="text-sm text-muted-foreground italic">"{req.message}"</p>}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {new Date(req.requested_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {req.status === "pending" ? (
+                      <>
+                        {isSentByShop ? (
+                          <span className="text-sm text-blue-600 flex items-center gap-1">
+                            <Clock className="h-4 w-4" /> Waiting for agent
+                          </span>
+                        ) : (
+                          <>
+                            <Button size="sm" variant="outline" onClick={() => handleAction(req.id, "rejected")}>
+                              <XCircle className="h-4 w-4 mr-1" /> Reject
+                            </Button>
+                            <Button size="sm" onClick={() => handleAction(req.id, "approved")}>
+                              <CheckCircle className="h-4 w-4 mr-1" /> Approve
+                            </Button>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <span className={`text-sm flex items-center gap-1 ${req.status === "approved" ? "text-green-600" : "text-red-600"}`}>
+                        {req.status === "approved" ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                        {req.status}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {req.status === "pending" ? (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => handleAction(req.id, "rejected")}>
-                        <XCircle className="h-4 w-4 mr-1" /> Reject
-                      </Button>
-                      <Button size="sm" onClick={() => handleAction(req.id, "approved")}>
-                        <CheckCircle className="h-4 w-4 mr-1" /> Approve
-                      </Button>
-                    </>
-                  ) : (
-                    <span className={`text-sm flex items-center gap-1 ${req.status === "approved" ? "text-green-600" : "text-red-600"}`}>
-                      {req.status === "approved" ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                      {req.status}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            )
+          })}
           {requests.length === 0 && (
             <p className="text-center text-muted-foreground py-8">No requests found</p>
           )}

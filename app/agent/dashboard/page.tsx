@@ -103,6 +103,7 @@ export default function AgentDashboardPage() {
   const fetchData = async (id: number) => {
     setLoading(true)
     try {
+      // Fetch shop-initiated requests (received by agent)
       const { data: invData, error: invError } = await supabase
         .from("agent_requests")
         .select(`
@@ -112,22 +113,56 @@ export default function AgentDashboardPage() {
           message,
           requested_by,
           status,
+          requested_at,
           shops:shop_id (shop_name, city, state)
         `)
         .eq("agent_id", id)
         .eq("status", "pending")
 
-      if (invError) throw invError
+      // Fetch agent-initiated requests (sent by agent)
+      const { data: sentData, error: sentError } = await supabase
+        .from("agent_link_requests")
+        .select(`
+          id,
+          shop_id,
+          commission_rate,
+          message,
+          requested_by,
+          status,
+          created_at,
+          shops:shop_id (shop_name, city, state)
+        `)
+        .eq("agent_id", id)
 
-      const formattedInvitations = (invData || []).map((inv: any) => ({
-        id: inv.id,
-        shop_id: inv.shop_id,
-        shop_name: inv.shops?.shop_name || "Unknown Shop",
-        shop_location: `${inv.shops?.city || ""}, ${inv.shops?.state || ""}`,
-        commission_rate: inv.commission_rate,
-        message: inv.message,
-        requested_by: inv.requested_by,
-      }))
+      if (invError) throw invError
+      if (sentError) throw sentError
+
+            const formattedInvitations = [
+        // Received from shops
+        ...(invData || []).map((inv: any) => ({
+          id: inv.id,
+          shop_id: inv.shop_id,
+          shop_name: inv.shops?.shop_name || "Unknown Shop",
+          shop_location: `${inv.shops?.city || ""}, ${inv.shops?.state || ""}`,
+          commission_rate: inv.commission_rate,
+          message: inv.message,
+          requested_by: inv.requested_by,
+          _source: "agent_requests" as const,
+        })),
+        // Sent by agent (pending)
+        ...(sentData || [])
+          .filter((s: any) => s.status === "pending")
+          .map((s: any) => ({
+            id: s.id,
+            shop_id: s.shop_id,
+            shop_name: s.shops?.shop_name || "Unknown Shop",
+            shop_location: `${s.shops?.city || ""}, ${s.shops?.state || ""}`,
+            commission_rate: s.commission_rate,
+            message: s.message,
+            requested_by: s.requested_by,
+            _source: "agent_link_requests" as const,
+          }))
+      ]
 
       const { data: shopLinks, error: linksError } = await supabase
         .from("shop_agents")
