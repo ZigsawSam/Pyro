@@ -20,19 +20,31 @@ export default function ShopLoginPage() {
     setLoading(true)
     setError("")
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    if (authError) {
-      setError(authError.message)
+    if (authError || !data.user) {
+      setError(authError?.message || "Invalid credentials")
       setLoading(false)
       return
     }
 
-    router.push("/shop/dashboard")
-    router.refresh()
+    // Fetch the shop for this user
+    const { data: shop, error: shopError } = await supabase
+      .from("shops")
+      .select("id")
+      .eq("user_id", data.user.id)
+      .single()
+
+    if (shopError || !shop) {
+      setError("No shop found for this account. Please register.")
+      setLoading(false)
+      return
+    }
+
+    router.push(`/shop/${shop.id}/dashboard`)
   }
 
   return (
