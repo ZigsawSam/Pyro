@@ -4,6 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Base colors using OKLCH */
   --background: oklch(0.98 0.001 231.6);
   --foreground: oklch(0.14 0.04 256.6);
   --card: oklch(1 0 0);
@@ -29,6 +30,8 @@
   --chart-4: oklch(0.7 0.12 322.2);
   --chart-5: oklch(0.45 0.13 284.8);
   --radius: 0.5rem;
+
+  /* Sidebar colors — OKLCH format matching your theme */
   --sidebar: oklch(0.14 0.04 256.6);
   --sidebar-foreground: oklch(1 0 0);
   --sidebar-primary: oklch(0.54 0.16 252.8);
@@ -64,6 +67,8 @@
   --chart-3: oklch(0.75 0.18 53.6);
   --chart-4: oklch(0.8 0.15 322.2);
   --chart-5: oklch(0.6 0.16 284.8);
+
+  /* Dark mode sidebar */
   --sidebar: oklch(0.14 0.04 256.6);
   --sidebar-foreground: oklch(0.95 0.01 0);
   --sidebar-primary: oklch(0.65 0.2 252.8);
@@ -100,6 +105,8 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
   --radius: 0.5rem;
+  
+  /* Sidebar theme mappings */
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -117,9 +124,4 @@
   body {
     @apply bg-background text-foreground;
   }
-}
-
-body {
-  background-color: var(--background);
-  color: var(--foreground);
 }
