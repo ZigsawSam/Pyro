@@ -244,8 +244,7 @@ try {
     const { data, error } = await supabase
       .from("payouts")
       .select("shop_id, amount_paid")
-      .eq("person_id", id)
-      .eq("person_type", "agent")
+      .eq("agent_id", id)
     
     if (error) {
       console.error("payouts error:", error)
@@ -383,47 +382,61 @@ try {
   }
 
   const handleRequest = async () => {
-    if (!selectedShop || !requestRate || !agentId) return
-    setSubmitting(true)
-    try {
-      const { data: existing } = await supabase
-        .from("agent_link_requests")
-        .select("id")
-        .eq("agent_id", agentId)
-        .eq("shop_id", selectedShop.id)
-        .eq("status", "pending")
-        .single()
+  if (!selectedShop || !requestRate || !agentId) return
+  setSubmitting(true)
+  try {
+    // Check for ANY existing request (not just pending)
+    const { data: existing } = await supabase
+      .from("agent_link_requests")
+      .select("id, status")
+      .eq("agent_id", agentId)
+      .eq("shop_id", selectedShop.id)
+      .maybeSingle()
 
-      if (existing) {
-        alert("You already have a pending request for this shop")
+    if (existing?.status === "pending") {
+      alert("You already have a pending request for this shop")
+      setSubmitting(false)
+      return
+    }
+    if (existing?.status === "rejected") {
+      // Delete rejected request to allow retry
+      const { error: deleteError } = await supabase
+        .from("agent_link_requests")
+        .delete()
+        .eq("id", existing.id)
+      if (deleteError) {
+        alert("Failed to clear previous rejected request")
         setSubmitting(false)
         return
       }
-
-      const { error } = await supabase
-        .from("agent_link_requests")
-        .insert({
-          agent_id: agentId,
-          shop_id: selectedShop.id,
-          commission_rate: Number(requestRate),
-          message: requestMessage,
-          status: "pending",
-          requested_by: "agent",
-        })
-
-      if (error) throw error
-      
-      setSelectedShop(null)
-      setRequestRate("")
-      setRequestMessage("")
-      handleSearch()
-      alert("Request sent successfully!")
-    } catch (e) { 
-      alert("Failed to send request") 
-    } finally { 
-      setSubmitting(false) 
     }
+
+    // Insert new request
+    const { error } = await supabase
+      .from("agent_link_requests")
+      .insert({
+        agent_id: agentId,
+        shop_id: selectedShop.id,
+        commission_rate: Number(requestRate),
+        message: requestMessage,
+        status: "pending",
+        requested_by: "agent",
+      })
+
+    if (error) throw error
+    
+    setSelectedShop(null)
+    setRequestRate("")
+    setRequestMessage("")
+    handleSearch()
+    alert("Request sent successfully!")
+  } catch (e) { 
+    console.error("handleRequest error:", e)
+    alert("Failed to send request") 
+  } finally { 
+    setSubmitting(false) 
   }
+}
 
       const handleInvitation = async (inviteId: number, action: "accept" | "reject") => {
   setProcessingInvite(inviteId)
