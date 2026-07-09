@@ -92,7 +92,7 @@ export default function AgentsPage() {
       // Fetch all payouts for this shop
       const { data: payoutsData } = await supabase
         .from("payouts")
-        .select("person_id, amount_paid")
+        .select("agent_id, amount_paid")
         .eq("shop_id", shopId)
         .eq("person_type", "agent")
 
@@ -107,7 +107,7 @@ export default function AgentsPage() {
 
       const paidByAgent: Record<number, number> = {}
       ;(payoutsData || []).forEach((p: any) => {
-        paidByAgent[p.person_id] = (paidByAgent[p.person_id] || 0) + Number(p.amount_paid || 0)
+        paidByAgent[p.agent_id] = (paidByAgent[p.agent_id] || 0) + Number(p.amount_paid || 0)
       })
 
       const formattedAgents: ShopAgent[] = (shopAgentsData || []).map((link: any) => {
