@@ -5,19 +5,25 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
-import { Loader2, Plus } from "lucide-react"
+import { Loader2, Plus, Wallet, TrendingUp, ArrowDownCircle } from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 
 interface Payout {
   id: number
-  person_id: number
+  agent_id?: number
+  staff_id?: number
   person_name: string
   person_type: string
   amount_paid: number
   payment_date: string
   remarks: string
-  is_advance: boolean
+}
+
+interface Person {
+  id: number
+  name: string
+  pending_commission: number
 }
 
 export default function ShopPayoutsPage() {
@@ -25,17 +31,16 @@ export default function ShopPayoutsPage() {
   const params = useParams()
   const shopId = Number(params?.shopId)
   const [payouts, setPayouts] = useState<Payout[]>([])
-  const [agents, setAgents] = useState<{id: number, name: string}[]>([])
-  const [staff, setStaff] = useState<{id: number, name: string}[]>([])
+  const [agents, setAgents] = useState<Person[]>([])
+  const [staff, setStaff] = useState<Person[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [newPayout, setNewPayout] = useState({
-    person_type: "agent",
+    person_type: "agent" as "agent" | "staff",
     person_id: "",
     amount_paid: "",
     payment_date: new Date().toISOString().split("T")[0],
     remarks: "",
-    is_advance: false,
   })
 
   useEffect(() => {
@@ -45,17 +50,70 @@ export default function ShopPayoutsPage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      // Fetch agents and staff for dropdowns
-      const [{ data: agentsData }, { data: staffData }] = await Promise.all([
-        supabase.from("shop_agents").select("agent_id, agents:agent_id(id, name)").eq("shop_id", shopId),
-        supabase.from("staff").select("id, name").eq("shop_id", shopId),
-      ])
+      // Fetch linked agents with pending commission
+      const { data: agentsData } = await supabase
+        .from("shop_agents")
+        .select("agent_id, commission_rate, agents:agent_id(id, name)")
+        .eq("shop_id", shopId)
 
-      setAgents((agentsData || []).map((a: any) => ({ id: a.agent_id, name: a.agents?.name || "Unknown" })))
-      setStaff((staffData || []).map((s: any) => ({ id: s.id, name: s.name })))
+      // Fetch staff
+      const { data: staffData } = await supabase
+        .from("staff")
+        .select("id, name")
+        .eq("shop_id", shopId)
 
-      // Fetch payouts
-      const { data, error } = await supabase
+      // Fetch sales for commission calculation
+      const { data: salesData } = await supabase
+        .from("sales")
+        .select("agent_id, amount, commission_amount")
+        .eq("shop_id", shopId)
+
+      // Fetch payouts for deduction
+      const { data: payoutsData } = await supabase
+        .from("payouts")
+        .select("agent_id, staff_id, amount_paid")
+        .eq("shop_id", shopId)
+
+      // Calculate pending commission for agents
+      const agentSales = (salesData || []).reduce((acc: any, s: any) => {
+        if (!acc[s.agent_id]) acc[s.agent_id] = { total: 0, commission: 0 }
+        acc[s.agent_id].total += Number(s.amount || 0)
+        acc[s.agent_id].commission += Number(s.commission_amount || 0)
+        return acc
+      }, {})
+
+      const agentPayouts = (payoutsData || [])
+        .filter((p: any) => p.agent_id)
+        .reduce((acc: any, p: any) => {
+          acc[p.agent_id] = (acc[p.agent_id] || 0) + Number(p.amount_paid || 0)
+          return acc
+        }, {})
+
+      const formattedAgents = (agentsData || []).map((a: any) => ({
+        id: a.agent_id,
+        name: a.agents?.name || "Unknown",
+        pending_commission: (agentSales[a.agent_id]?.commission || 0) - (agentPayouts[a.agent_id] || 0),
+      }))
+
+      // Calculate pending for staff (simplified - you may have different logic)
+      const staffPayouts = (payoutsData || [])
+        .filter((p: any) => p.staff_id)
+        .reduce((acc: any, p: any) => {
+          acc[p.staff_id] = (acc[p.staff_id] || 0) + Number(p.amount_paid || 0)
+          return acc
+        }, {})
+
+      const formattedStaff = (staffData || []).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        pending_commission: 0, // Staff logic may differ
+      }))
+
+      setAgents(formattedAgents)
+      setStaff(formattedStaff)
+
+      // Fetch payouts with enriched names
+      const { data: payoutsRaw, error } = await supabase
         .from("payouts")
         .select("*")
         .eq("shop_id", shopId)
@@ -63,22 +121,21 @@ export default function ShopPayoutsPage() {
 
       if (error) throw error
 
-      // Enrich with names
-      const enrichedPayouts = await Promise.all((data || []).map(async (p: any) => {
+      const enrichedPayouts = (payoutsRaw || []).map((p: any) => {
         let personName = "Unknown"
-        if (p.person_type === "agent") {
-          const { data: agent } = await supabase.from("agents").select("name").eq("id", p.person_id).single()
+        if (p.person_type === "agent" && p.agent_id) {
+          const agent = formattedAgents.find((a: any) => a.id === p.agent_id)
           personName = agent?.name || "Unknown"
-        } else {
-          const { data: staffMember } = await supabase.from("staff").select("name").eq("id", p.person_id).single()
+        } else if (p.person_type === "staff" && p.staff_id) {
+          const staffMember = formattedStaff.find((s: any) => s.id === p.staff_id)
           personName = staffMember?.name || "Unknown"
         }
         return { ...p, person_name: personName }
-      }))
+      })
 
       setPayouts(enrichedPayouts)
     } catch (e) {
-      console.error(e)
+      console.error("fetchData error:", e)
     } finally {
       setLoading(false)
     }
@@ -86,15 +143,55 @@ export default function ShopPayoutsPage() {
 
   const handleAddPayout = async () => {
     try {
-      const { error } = await supabase.from("payouts").insert({
+      const personId = Number(newPayout.person_id)
+      const paymentAmount = Number(newPayout.amount_paid)
+      
+      if (!personId || !paymentAmount || paymentAmount <= 0) {
+        alert("Please select a person and enter a valid amount")
+        return
+      }
+
+      // Get current pending commission
+      const personList = newPayout.person_type === "agent" ? agents : staff
+      const person = personList.find((p: any) => p.id === personId)
+      const pendingCommission = person?.pending_commission || 0
+
+      // Calculate distribution
+      let pendingDeducted = 0
+      let advanceAmount = 0
+
+      if (pendingCommission > 0) {
+        if (paymentAmount >= pendingCommission) {
+          // Scenario 1: Payment covers all pending + advance
+          pendingDeducted = pendingCommission
+          advanceAmount = paymentAmount - pendingCommission
+        } else {
+          // Scenario 2: Payment partially covers pending
+          pendingDeducted = paymentAmount
+          advanceAmount = 0
+        }
+      } else {
+        // Scenario 3: No pending, all goes to advance
+        pendingDeducted = 0
+        advanceAmount = paymentAmount
+      }
+
+      // Build payout data
+      const payoutData: any = {
         shop_id: shopId,
-        person_id: Number(newPayout.person_id),
         person_type: newPayout.person_type,
-        amount_paid: Number(newPayout.amount_paid),
+        amount_paid: paymentAmount,
         payment_date: newPayout.payment_date,
-        remarks: newPayout.remarks,
-        is_advance: newPayout.is_advance,
-      })
+        remarks: newPayout.remarks || `Pending: ₹${pendingDeducted}, Advance: ₹${advanceAmount}`,
+      }
+
+      if (newPayout.person_type === "agent") {
+        payoutData.agent_id = personId
+      } else {
+        payoutData.staff_id = personId
+      }
+
+      const { error } = await supabase.from("payouts").insert(payoutData)
 
       if (error) throw error
 
@@ -104,12 +201,11 @@ export default function ShopPayoutsPage() {
         amount_paid: "",
         payment_date: new Date().toISOString().split("T")[0],
         remarks: "",
-        is_advance: false,
       })
       setShowAddForm(false)
       fetchData()
     } catch (e) {
-      console.error(e)
+      console.error("handleAddPayout error:", e)
       alert("Failed to record payout")
     }
   }
@@ -118,87 +214,134 @@ export default function ShopPayoutsPage() {
 
   return (
     <MainLayout title="Payouts" shopId={shopId}>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Payouts</h1>
-        <Button onClick={() => setShowAddForm(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Record Payout
-        </Button>
-      </div>
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Payouts</h1>
+            <p className="text-sm text-muted-foreground">Record payments to agents and staff</p>
+          </div>
+          <Button onClick={() => setShowAddForm(!showAddForm)} className="gap-2">
+            <Plus className="h-4 w-4" /> {showAddForm ? "Cancel" : "Record Payout"}
+          </Button>
+        </div>
 
-      {showAddForm && (
-        <Card className="p-4 space-y-3">
-          <h3 className="font-semibold">Record Payout</h3>
-          <div className="grid gap-3 md:grid-cols-2">
-            <select
-              value={newPayout.person_type}
-              onChange={(e) => setNewPayout({...newPayout, person_type: e.target.value, person_id: ""})}
-              className="w-full rounded border border-input bg-background px-3 py-2"
-            >
-              <option value="agent">Agent</option>
-              <option value="staff">Staff</option>
-            </select>
-            <select
-              value={newPayout.person_id}
-              onChange={(e) => setNewPayout({...newPayout, person_id: e.target.value})}
-              className="w-full rounded border border-input bg-background px-3 py-2"
-            >
-              <option value="">Select {newPayout.person_type}</option>
-              {personOptions.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            <Input type="number" placeholder="Amount" value={newPayout.amount_paid} onChange={(e) => setNewPayout({...newPayout, amount_paid: e.target.value})} />
-            <Input type="date" value={newPayout.payment_date} onChange={(e) => setNewPayout({...newPayout, payment_date: e.target.value})} />
-            <Input placeholder="Remarks" value={newPayout.remarks} onChange={(e) => setNewPayout({...newPayout, remarks: e.target.value})} />
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={newPayout.is_advance}
-                onChange={(e) => setNewPayout({...newPayout, is_advance: e.target.checked})}
+        {/* Add Payout Form */}
+        {showAddForm && (
+          <Card className="p-4 space-y-4">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Wallet className="h-4 w-4" /> Record New Payout
+            </h3>
+            
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium mb-1">Person Type</label>
+                <select
+                  value={newPayout.person_type}
+                  onChange={(e) => setNewPayout({ ...newPayout, person_type: e.target.value as "agent" | "staff", person_id: "" })}
+                  className="w-full rounded border border-input bg-background px-3 py-2"
+                >
+                  <option value="agent">Agent</option>
+                  <option value="staff">Staff</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Select {newPayout.person_type === "agent" ? "Agent" : "Staff"}
+                  {personOptions.length > 0 && (
+                    <span className="text-xs text-muted-foreground ml-1">
+                      (Pending shown)
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={newPayout.person_id}
+                  onChange={(e) => setNewPayout({ ...newPayout, person_id: e.target.value })}
+                  className="w-full rounded border border-input bg-background px-3 py-2"
+                >
+                  <option value="">Select...</option>
+                  {personOptions.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name} {person.pending_commission > 0 ? `(Pending: ₹${person.pending_commission.toFixed(2)})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Amount (₹)</label>
+                <Input
+                  type="number"
+                  placeholder="Enter amount"
+                  value={newPayout.amount_paid}
+                  onChange={(e) => setNewPayout({ ...newPayout, amount_paid: e.target.value })}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Payment Date</label>
+                <Input
+                  type="date"
+                  value={newPayout.payment_date}
+                  onChange={(e) => setNewPayout({ ...newPayout, payment_date: e.target.value })}
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Remarks (optional)</label>
+              <Input
+                placeholder="Payment notes..."
+                value={newPayout.remarks}
+                onChange={(e) => setNewPayout({ ...newPayout, remarks: e.target.value })}
               />
-              <span className="text-sm">Is Advance</span>
-            </label>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setShowAddForm(false)}>Cancel</Button>
-            <Button onClick={handleAddPayout} disabled={!newPayout.person_id || !newPayout.amount_paid}>Record</Button>
-          </div>
-        </Card>
-      )}
+            </div>
+            
+            <Button 
+              onClick={handleAddPayout} 
+              disabled={!newPayout.person_id || !newPayout.amount_paid}
+              className="w-full"
+            >
+              <ArrowDownCircle className="h-4 w-4 mr-2" /> Record Payout
+            </Button>
+          </Card>
+        )}
 
-      {loading ? (
-        <div className="flex justify-center py-8">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="pb-2">Date</th>
-                <th className="pb-2">Person</th>
-                <th className="pb-2">Type</th>
-                <th className="pb-2 text-right">Amount</th>
-                <th className="pb-2">Remarks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payouts.map((p) => (
-                <tr key={p.id} className="border-b">
-                  <td className="py-2">{new Date(p.payment_date).toLocaleDateString()}</td>
-                  <td className="py-2">{p.person_name}</td>
-                  <td className="py-2 capitalize">{p.person_type} {p.is_advance && <span className="text-amber-600 text-xs">(advance)</span>}</td>
-                  <td className="py-2 text-right">₹{Number(p.amount_paid).toLocaleString()}</td>
-                  <td className="py-2 text-muted-foreground">{p.remarks || "-"}</td>
-                </tr>
-              ))}
-              {payouts.length === 0 && (
-                <tr><td colSpan={5} className="text-center text-muted-foreground py-8">No payouts recorded</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+        {/* Payouts List */}
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : payouts.length === 0 ? (
+          <Card className="p-8 text-center text-muted-foreground">
+            <Wallet className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No payouts recorded yet.</p>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {payouts.map((payout) => (
+              <Card key={payout.id} className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-primary/10 p-2 rounded">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{payout.person_name}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{payout.person_type}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(payout.payment_date).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold">₹{Number(payout.amount_paid).toLocaleString()}</p>
+                    {payout.remarks && <p className="text-xs text-muted-foreground">{payout.remarks}</p>}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </MainLayout>
   )
 }
