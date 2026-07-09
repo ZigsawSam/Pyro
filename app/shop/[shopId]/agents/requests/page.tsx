@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Loader2, CheckCircle, XCircle, Clock, Send, Inbox } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 
 interface AgentRequest {
@@ -23,7 +23,7 @@ interface AgentRequest {
 
 export default function AgentRequestsPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = createShopClient()
   const params = useParams()
   const shopId = Number(params?.shopId)
   const [requests, setRequests] = useState<AgentRequest[]>([])

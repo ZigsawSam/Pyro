@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+import { createShopClient } from "@/lib/supabase/shop-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -10,7 +10,7 @@ import { Loader2 } from "lucide-react"
 
 export default function ShopLoginPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = createShopClient()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)

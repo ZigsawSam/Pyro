@@ -12,7 +12,7 @@ import { AddAgentDialog } from "@/components/agents/add-agent-dialog"
 import { AgentProfileDialog } from "@/components/agents/agent-profile-dialog"
 import { PayAgentDialog } from "@/components/agents/pay-agent-dialog"
 import { Plus, CreditCard, UserRound, CheckCircle2, UserPlus, Bell, Search, ArrowRight, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createShopClient } from "@/lib/supabase/shop-client"
 
 interface ShopAgent {
   link_id: number
@@ -47,7 +47,7 @@ export default function AgentsPage() {
   const params = useParams()
   const rawShopId = Array.isArray(params.shopId) ? params.shopId[0] : params.shopId
   const shopId = Number(rawShopId)
-  const supabase = createClient()
+  const supabase = createShopClient()
   const [agents, setAgents] = useState<ShopAgent[]>([])
   const [requests, setRequests] = useState<AgentRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)

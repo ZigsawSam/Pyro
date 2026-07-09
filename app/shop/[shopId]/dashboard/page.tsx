@@ -4,14 +4,14 @@ import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"  // ← ADD useParams
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Users, DollarSign, TrendingUp, Calendar } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 
 // REMOVE params from props — use useParams() instead
 export default function ShopDashboardPage() {
   const router = useRouter()
   const params = useParams()  // ← GET params from hook
-  const supabase = createClient()
+  const supabase = createShopClient()
   const shopId = Number(params?.shopId)  // ← EXTRACT from params object
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({

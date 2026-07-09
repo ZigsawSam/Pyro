@@ -7,7 +7,7 @@ import { DataTable } from "@/components/data-table"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createAgentClient } from "@/lib/supabase/agent-client"
 
 interface Commission {
   sale_id: number
@@ -21,7 +21,7 @@ interface Commission {
 function CommissionsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClient()
+  const supabase = createAgentClient()
   const shopId = searchParams.get("shop_id")
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [shopName, setShopName] = useState("")

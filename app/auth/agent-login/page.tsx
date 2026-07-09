@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+import { createAgentClient } from "@/lib/supabase/agent-client"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,7 @@ import { Loader2, AlertCircle } from "lucide-react"
 
 export default function AgentLoginPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = createAgentClient()
   const [phoneNumber, setPhoneNumber] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")

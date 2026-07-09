@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Loader2, Store, Clock, CheckCircle, XCircle, Search, ArrowRight, Wallet, TrendingUp, Receipt, Filter } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 
 interface Shop {
@@ -56,7 +56,7 @@ interface SaleRecord {
 
 export default function AgentDashboardPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = createShopClient()
   const [agentId, setAgentId] = useState<number | null>(null)
   const [agentName, setAgentName] = useState<string>("")
   const [invitations, setInvitations] = useState<Invitation[]>([])

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Loader2, Store, Clock, CheckCircle, XCircle } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createAgentClient } from "@/lib/supabase/agent-client"
 
 interface Shop {
   id: number
@@ -28,7 +28,7 @@ interface Request {
 
 export default function AgentShopsPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = createAgentClient()
   const [shops, setShops] = useState<Shop[]>([])
   const [myRequests, setMyRequests] = useState<Request[]>([])
   const [search, setSearch] = useState("")

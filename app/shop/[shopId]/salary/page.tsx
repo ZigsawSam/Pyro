@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Loader2, Plus, CheckCircle } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 
 interface SalaryRecord {
@@ -23,7 +23,7 @@ interface SalaryRecord {
 }
 
 export default function ShopSalaryPage() {
-  const supabase = createClient()
+  const supabase = createShopClient()
   const params = useParams()
   const shopId = Number(params?.shopId)
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
