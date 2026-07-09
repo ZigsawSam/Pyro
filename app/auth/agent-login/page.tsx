@@ -32,10 +32,40 @@ export default function AgentLoginPage() {
       // Agents use phone@agent.local as email
       const agentEmail = `${phoneNumber}@agent.local`
 
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
+      // Race against timeout to fix Supabase hanging promise bug on Vercel
+      const loginPromise = supabase.auth.signInWithPassword({
         email: agentEmail,
-        password: password || phoneNumber, // fallback to phone if no password set
+        password: password || phoneNumber,
       })
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("LOGIN_TIMEOUT")), 10000)
+      )
+
+      let result: any
+      try {
+        result = await Promise.race([loginPromise, timeoutPromise])
+      } catch (timeoutErr: any) {
+        if (timeoutErr.message === "LOGIN_TIMEOUT") {
+          const { data: sessionData } = await supabase.auth.getSession()
+          if (sessionData?.session) {
+            console.log("Session exists despite timeout — login succeeded")
+            result = {
+              data: {
+                session: sessionData.session,
+                user: sessionData.session.user
+              },
+              error: null
+            }
+          } else {
+            throw new Error("Login timed out. Please try again.")
+          }
+        } else {
+          throw timeoutErr
+        }
+      }
+
+      const { data, error: authError } = result
 
       if (authError || !data.user) {
         setError(authError?.message || "Invalid phone number or password")

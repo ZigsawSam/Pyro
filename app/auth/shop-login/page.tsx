@@ -20,31 +20,66 @@ export default function ShopLoginPage() {
     setLoading(true)
     setError("")
 
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      // Race against timeout to fix Supabase hanging promise bug on Vercel
+      const loginPromise = supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    if (authError || !data.user) {
-      setError(authError?.message || "Invalid credentials")
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("LOGIN_TIMEOUT")), 10000)
+      )
+
+      let result: any
+      try {
+        result = await Promise.race([loginPromise, timeoutPromise])
+      } catch (timeoutErr: any) {
+        if (timeoutErr.message === "LOGIN_TIMEOUT") {
+          // Check if session was actually created despite promise hanging
+          const { data: sessionData } = await supabase.auth.getSession()
+          if (sessionData?.session) {
+            console.log("Session exists despite timeout — login succeeded")
+            result = { 
+              data: { 
+                session: sessionData.session, 
+                user: sessionData.session.user 
+              }, 
+              error: null 
+            }
+          } else {
+            throw new Error("Login timed out. Please try again.")
+          }
+        } else {
+          throw timeoutErr
+        }
+      }
+
+      if (result.error || !result.data?.user) {
+        setError(result.error?.message || "Invalid credentials")
+        setLoading(false)
+        return
+      }
+
+      // Fetch the shop for this user
+      const { data: shop, error: shopError } = await supabase
+        .from("shops")
+        .select("id")
+        .eq("user_id", result.data.user.id)
+        .single()
+
+      if (shopError || !shop) {
+        setError("No shop found for this account. Please register.")
+        setLoading(false)
+        return
+      }
+
+      router.push(`/shop/${shop.id}/dashboard`)
+    } catch (err: any) {
+      console.error("Login error:", err)
+      setError(err.message || "Login failed")
       setLoading(false)
-      return
     }
-
-    // Fetch the shop for this user
-    const { data: shop, error: shopError } = await supabase
-      .from("shops")
-      .select("id")
-      .eq("user_id", data.user.id)
-      .single()
-
-    if (shopError || !shop) {
-      setError("No shop found for this account. Please register.")
-      setLoading(false)
-      return
-    }
-
-    router.push(`/shop/${shop.id}/dashboard`)
   }
 
   return (
