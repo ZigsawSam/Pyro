@@ -144,13 +144,31 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
 
     setIsLoading(true)
     try {
+      // Calculate advance/pending distribution
+      const pendingAmount = Number(agent?.pending_commission || 0)
+      let pendingDeducted = 0
+      let advanceAmount = 0
+
+      if (pendingAmount > 0) {
+        if (paymentAmount >= pendingAmount) {
+          pendingDeducted = pendingAmount
+          advanceAmount = paymentAmount - pendingAmount
+        } else {
+          pendingDeducted = paymentAmount
+          advanceAmount = 0
+        }
+      } else {
+        pendingDeducted = 0
+        advanceAmount = paymentAmount
+      }
+
       const { error } = await supabase.from("payouts").insert({
         shop_id: shopId,
         agent_id: agent.id,
         person_type: "agent",
         amount_paid: Number(paymentAmount),
         payment_date: new Date().toISOString().split("T")[0],
-        remarks: paymentMode === "full" ? "Full payout via QR" : `Custom payout via QR (${paymentAmount})`,
+        remarks: `QR: Pending ₹${pendingDeducted.toFixed(2)}, Advance ₹${advanceAmount.toFixed(2)}`,
       })
 
       if (error) throw error
@@ -160,7 +178,8 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
       reset()
       onOpenChange(false)
     } catch (error) {
-      console.error(error)
+      console.error("handleConfirmPayment error:", error)
+      alert("Failed to record payment")
     } finally {
       setIsLoading(false)
     }
