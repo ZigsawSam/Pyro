@@ -1,7 +1,7 @@
-import { createBrowserClient } from "@supabase/ssr"
+import { createClient } from "@supabase/supabase-js"
 
 export function createShopClient() {
-  return createBrowserClient(
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -9,11 +9,7 @@ export function createShopClient() {
         storageKey: "shop-auth-token",
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false, // Fix for Vercel
-      },
-      cookieOptions: {
-        sameSite: "lax",
-        secure: true,
+        detectSessionInUrl: false,
       }
     }
   )
