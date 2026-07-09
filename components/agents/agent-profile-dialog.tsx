@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loader2, Pencil, Trash2, Wallet, CheckCircle2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/shop-client"
+import { createShopClient } from "@/lib/supabase/shop-client"
 
 interface AgentProfileDialogProps {
   open: boolean

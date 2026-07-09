@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Receipt, QrCode, Wallet } from "lucide-react"
 import QRCode from "qrcode"
-import { createClient } from "@/lib/supabase/shop-client"
+import { createShopClient } from "@/lib/supabase/shop-client"
 
 interface PayAgentDialogProps {
   open: boolean
