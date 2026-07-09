@@ -443,7 +443,15 @@ export default function AgentsPage() {
     setSelectedAgent(null)
   }}
 />
-      <PayAgentDialog open={showPayDialog} onOpenChange={setShowPayDialog} shopId={shopId} agent={selectedAgent} onPaid={() => { fetchAgents(); setShowPayDialog(false); }} />
-    </MainLayout>
+      <PayAgentDialog 
+        open={showPayDialog} 
+        onOpenChange={setShowPayDialog} 
+        shopId={shopId} 
+        agent={selectedAgent} 
+        onPaid={() => {
+          fetchAgents()
+          setShowPayDialog(false)
+        }} 
+      />    </MainLayout>
   )
 }

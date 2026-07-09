@@ -140,35 +140,35 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
   }
 
   const handleConfirmPayment = async () => {
-    if (!agent || !paymentAmount) return
+  if (!agent || !paymentAmount) return
 
-    setIsLoading(true)
-    try {
-      // Calculate advance/pending distribution
-      const pendingAmount = Number(agent?.pending_commission || 0)
+  setIsLoading(true)
+  try {
+    // Calculate distribution
+    const pendingAmount = Number(agent.pending_commission || 0)
       let pendingDeducted = 0
       let advanceAmount = 0
 
       if (pendingAmount > 0) {
-        if (paymentAmount >= pendingAmount) {
-          pendingDeducted = pendingAmount
-          advanceAmount = paymentAmount - pendingAmount
-        } else {
-          pendingDeducted = paymentAmount
-          advanceAmount = 0
-        }
+      if (paymentAmount >= pendingAmount) {
+        pendingDeducted = pendingAmount
+        advanceAmount = paymentAmount - pendingAmount
       } else {
-        pendingDeducted = 0
-        advanceAmount = paymentAmount
+        pendingDeducted = paymentAmount
+        advanceAmount = 0
+      }
+      } else {
+      pendingDeducted = 0
+      advanceAmount = paymentAmount
       }
 
       const { error } = await supabase.from("payouts").insert({
-        shop_id: shopId,
-        agent_id: agent.id,
-        person_type: "agent",
-        amount_paid: Number(paymentAmount),
-        payment_date: new Date().toISOString().split("T")[0],
-        remarks: `QR: Pending ₹${pendingDeducted.toFixed(2)}, Advance ₹${advanceAmount.toFixed(2)}`,
+      shop_id: shopId,
+      agent_id: agent.id,
+      person_type: "agent",
+      amount_paid: Number(paymentAmount),
+      payment_date: new Date().toISOString().split("T")[0],
+      remarks: `QR: Pending ₹${pendingDeducted}, Advance ₹${advanceAmount}`,
       })
 
       if (error) throw error
@@ -177,13 +177,13 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
       onPaid()
       reset()
       onOpenChange(false)
-    } catch (error) {
-      console.error("handleConfirmPayment error:", error)
+      } catch (error) {
+      console.error(error)
       alert("Failed to record payment")
-    } finally {
+      } finally {
       setIsLoading(false)
+      }
     }
-  }
 
   return (
     <Dialog open={open} onOpenChange={(value) => { if (!value) reset(); onOpenChange(value) }}>
@@ -289,4 +289,5 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
       </DialogContent>
     </Dialog>
   )
+  
 }

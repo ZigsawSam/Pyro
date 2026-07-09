@@ -25,11 +25,6 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
   const [totalPaid, setTotalPaid] = useState<number>(0)
   const [totalSales, setTotalSales] = useState<number>(0)
   const [payoutHistory, setPayoutHistory] = useState<any[]>([])
-  const [pendingCommission, setPendingCommission] = useState<number>(0)
-  const [totalPaid, setTotalPaid] = useState<number>(0)
-  const [totalSales, setTotalSales] = useState<number>(0)
-  const [payoutHistory, setPayoutHistory] = useState<any[]>([])
-  const [payoutHistory, setPayoutHistory] = useState<any[]>([])
   const [formData, setFormData] = useState({
     name: "",
     phone_number: "",
@@ -56,8 +51,13 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
       upi_id: agent.upi_id || "",
     })
     setIsEditing(false)
-    fetchAdvances()
-  }, [agent, open])
+  }, [agent?.id])
+
+  useEffect(() => {
+    if (open && agent) {
+      calculateCommission()
+    }
+  }, [open])
 
   const calculateCommission = async () => {
     if (!agent) return
@@ -245,8 +245,8 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
               <div className="rounded-lg border bg-muted/20 p-4 text-sm space-y-2">
                 <p><span className="font-medium">Commission Rate:</span> {agent.commission_rate}%</p>
                 <p><span className="font-medium">Total Commission:</span> ₹{Number(totalCommission).toLocaleString()}</p>
-                <p><span className="font-medium">Pending Commission:</span> ₹{pending.toLocaleString()}</p>
-                <p><span className="font-medium">Paid Commission:</span> ₹{Number(agent.paid_commission || 0).toLocaleString()}</p>
+                <p><span className="font-medium">Pending Commission:</span> ₹{pendingCommission.toLocaleString()}</p>
+                <p><span className="font-medium">Paid Commission:</span> ₹{Number(totalPaid || 0).toLocaleString()}</p>
                 <p><span className="font-medium">Account:</span> {agent.account_name || "Not added"}</p>
                 {agent.upi_id ? <p><span className="font-medium">UPI:</span> {agent.upi_id}</p> : null}
               </div>
@@ -290,5 +290,6 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
         </div>
       </DialogContent>
     </Dialog>
+    
   )
 }
