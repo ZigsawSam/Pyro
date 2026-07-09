@@ -295,8 +295,7 @@ try {
           amount,
           commission_amount,
           sale_date,
-          notes,
-          shops:shop_id (shop_name)
+          notes
         `)
         .eq("agent_id", agentId)
 
@@ -310,14 +309,28 @@ try {
         query = query.lte("sale_date", salesDateTo)
       }
 
-      const { data, error } = await query.order("sale_date", { ascending: false })
+      const { data: salesData, error } = await query.order("sale_date", { ascending: false })
 
       if (error) throw error
 
-      const formattedSales = (data || []).map((sale: any) => ({
+      // Fetch shop names separately to avoid RLS join issues
+      const shopIds = [...new Set((salesData || []).map((s: any) => s.shop_id))]
+      let shopMap: Record<number, string> = {}
+      if (shopIds.length > 0) {
+        const { data: shopsData } = await supabase
+          .from("shops")
+          .select("id, shop_name")
+          .in("id", shopIds)
+        shopMap = (shopsData || []).reduce((acc: any, s: any) => {
+          acc[s.id] = s.shop_name
+          return acc
+        }, {})
+      }
+
+      const formattedSales = (salesData || []).map((sale: any) => ({
         id: sale.id,
         shop_id: sale.shop_id,
-        shop_name: sale.shops?.shop_name || "Unknown Shop",
+        shop_name: shopMap[sale.shop_id] || "Unknown Shop",
         amount: sale.amount,
         commission_amount: sale.commission_amount,
         sale_date: sale.sale_date,
@@ -326,7 +339,7 @@ try {
 
       setSalesRecords(formattedSales)
     } catch (e) { 
-      console.error(e)
+      console.error("fetchSales error:", e)
       setSalesRecords([])
     } finally { 
       setSalesLoading(false) 

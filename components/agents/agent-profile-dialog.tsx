@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loader2, Pencil, Trash2, Wallet, CheckCircle2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/shop-client"
 
 interface AgentProfileDialogProps {
   open: boolean
@@ -17,7 +17,7 @@ interface AgentProfileDialogProps {
 }
 
 export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdated, onDeleted }: AgentProfileDialogProps) {
-  const supabase = createClient()
+  const supabase = createShopClient()
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -58,9 +58,8 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
         .from("payouts")
         .select("*")
         .eq("shop_id", shopId)
-        .eq("person_id", agent.id)
+        .eq("agent_id", agent.id)
         .eq("person_type", "agent")
-        .eq("is_advance", true)
         .order("payment_date", { ascending: false })
 
       if (error) throw error

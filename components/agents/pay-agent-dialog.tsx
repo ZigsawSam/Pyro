@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Receipt, QrCode, Wallet } from "lucide-react"
 import QRCode from "qrcode"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/shop-client"
 
 interface PayAgentDialogProps {
   open: boolean
@@ -18,7 +18,7 @@ interface PayAgentDialogProps {
 }
 
 export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: PayAgentDialogProps) {
-  const supabase = createClient()
+  const supabase = createShopClient()
   const [isLoading, setIsLoading] = useState(false)
   const [sales, setSales] = useState<any[]>([])
   const [showStatement, setShowStatement] = useState(false)
@@ -146,12 +146,11 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
     try {
       const { error } = await supabase.from("payouts").insert({
         shop_id: shopId,
+        agent_id: agent.id,
         person_type: "agent",
-        person_id: agent.id,
-        amount_paid: paymentAmount,
+        amount_paid: Number(paymentAmount),
         payment_date: new Date().toISOString().split("T")[0],
         remarks: paymentMode === "full" ? "Full payout via QR" : `Custom payout via QR (${paymentAmount})`,
-        is_advance: false,
       })
 
       if (error) throw error

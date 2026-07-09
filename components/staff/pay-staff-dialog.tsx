@@ -149,11 +149,11 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
       const { error } = await supabase.from("payouts").insert({
         shop_id: shopId,
         person_type: "staff",
-        person_id: staff.id,
+        staff_id: staff.id,
         amount_paid: paymentAmount,
         payment_date: new Date().toISOString().split("T")[0],
         remarks: paymentMode === "full" ? "Full payout via QR" : `Custom payout via QR (${paymentAmount})`,
-        is_advance: false,
+        
       })
 
       if (error) throw error

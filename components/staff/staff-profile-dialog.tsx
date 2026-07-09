@@ -62,9 +62,9 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
         .from("payouts")
         .select("*")
         .eq("shop_id", shopId)
-        .eq("person_id", staff.id)
+        .eq("staff_id", staff.id)
         .eq("person_type", "staff")
-        .eq("is_advance", true)
+        
         .order("payment_date", { ascending: false })
 
       if (error) throw error
