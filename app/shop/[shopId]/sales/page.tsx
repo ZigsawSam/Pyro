@@ -44,6 +44,7 @@ export default function ShopSalesPage() {
   })
 
   useEffect(() => {
+    // Get shopId from URL
     const path = window.location.pathname
     const match = path.match(/\/shop\/(\d+)\/sales/)
     if (match) {
@@ -63,6 +64,7 @@ export default function ShopSalesPage() {
       router.push("/auth/shop-login")
       return
     }
+    // Verify user owns this shop
     const { data: shop } = await supabase
       .from("shops")
       .select("id, shop_name")
@@ -82,6 +84,7 @@ export default function ShopSalesPage() {
     if (!shopId) return
     setLoading(true)
     try {
+      // Fetch linked agents with commission rates
       const { data: linkedAgents, error: agentsError } = await supabase
         .from("shop_agents")
         .select(`
@@ -100,6 +103,7 @@ export default function ShopSalesPage() {
       }))
       setAgents(formattedAgents)
 
+      // Fetch sales for this shop
       const { data: salesData, error: salesError } = await supabase
         .from("sales")
         .select(`
@@ -199,6 +203,7 @@ export default function ShopSalesPage() {
   return (
     <MainLayout title="Sales" shopId={shopId || undefined}>
       <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Sales</h1>
@@ -209,6 +214,7 @@ export default function ShopSalesPage() {
           </Button>
         </div>
 
+        {/* Stats */}
         <div className="grid grid-cols-2 gap-4">
           <Card className="p-4">
             <p className="text-sm text-muted-foreground">Total Sales</p>
@@ -220,6 +226,7 @@ export default function ShopSalesPage() {
           </Card>
         </div>
 
+        {/* Add Sale Form */}
         {showAddForm && (
           <Card className="p-4 space-y-4">
             <h3 className="font-semibold">Record New Sale</h3>
@@ -287,6 +294,7 @@ export default function ShopSalesPage() {
           </Card>
         )}
 
+        {/* Sales History */}
         {loading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin" />

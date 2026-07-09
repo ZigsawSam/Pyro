@@ -77,8 +77,12 @@ export default function AgentsPage() {
         .select("id, agent_id, commission_rate, agents:agent_id(id, name, phone_number, description, account_name, account_number, bank_name, ifsc_code, upi_id)")
         .eq("shop_id", shopId)
 
-      if (shopAgentsError) throw shopAgentsError
+      if (shopAgentsError) {
+        console.error("shop_agent error:", shopAgentsError)
+        throw shopAgentsError
+      } 
 
+      console.log("shopAgentsData:", shopAgentsData)
       // Fetch all sales for this shop to calculate totals
       const { data: salesData } = await supabase
         .from("sales")
@@ -132,6 +136,7 @@ export default function AgentsPage() {
       setAgents(formattedAgents)
     } catch (error) {
       console.error("Error fetching agents:", error)
+      alert("Failed to load agents: " + (error as any).message)
     } finally {
       setIsLoading(false)
     }
@@ -424,8 +429,21 @@ export default function AgentsPage() {
       </Dialog>
 
       <AddAgentDialog open={showDialog} onOpenChange={setShowDialog} onAgentAdded={fetchAgents} shopId={shopId} />
-      <AgentProfileDialog open={showProfile} onOpenChange={setShowProfile} shopId={shopId} agent={selectedAgent} onUpdated={fetchAgents} onDeleted={fetchAgents} />
-      <PayAgentDialog open={showPayDialog} onOpenChange={setShowPayDialog} shopId={shopId} agent={selectedAgent} onPaid={fetchAgents} />
+      <AgentProfileDialog
+  open={showProfile}
+  onOpenChange={setShowProfile}
+  shopId={shopId}
+  agent={selectedAgent}
+  onUpdated={() => {
+    fetchAgents()  // Refresh the entire agents list
+    setSelectedAgent(null)
+  }}
+  onDeleted={() => {
+    fetchAgents()
+    setSelectedAgent(null)
+  }}
+/>
+      <PayAgentDialog open={showPayDialog} onOpenChange={setShowPayDialog} shopId={shopId} agent={selectedAgent} onPaid={() => { fetchAgents(); setShowPayDialog(false); }} />
     </MainLayout>
   )
 }

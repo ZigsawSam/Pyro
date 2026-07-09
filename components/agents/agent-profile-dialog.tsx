@@ -21,7 +21,15 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [advances, setAdvances] = useState<any[]>([])
+  const [pendingCommission, setPendingCommission] = useState<number>(0)
+  const [totalPaid, setTotalPaid] = useState<number>(0)
+  const [totalSales, setTotalSales] = useState<number>(0)
+  const [payoutHistory, setPayoutHistory] = useState<any[]>([])
+  const [pendingCommission, setPendingCommission] = useState<number>(0)
+  const [totalPaid, setTotalPaid] = useState<number>(0)
+  const [totalSales, setTotalSales] = useState<number>(0)
+  const [payoutHistory, setPayoutHistory] = useState<any[]>([])
+  const [payoutHistory, setPayoutHistory] = useState<any[]>([])
   const [formData, setFormData] = useState({
     name: "",
     phone_number: "",
@@ -51,10 +59,27 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
     fetchAdvances()
   }, [agent, open])
 
-  const fetchAdvances = async () => {
+  const calculateCommission = async () => {
     if (!agent) return
     try {
-      const { data, error } = await supabase
+      // Fetch all sales for this agent in this shop
+      const { data: salesData, error: salesError } = await supabase
+        .from("sales")
+        .select("amount, commission_amount")
+        .eq("shop_id", shopId)
+        .eq("agent_id", agent.id)
+
+      if (salesError) throw salesError
+
+      const totalCommission = (salesData || []).reduce(
+        (sum: number, s: any) => sum + Number(s.commission_amount || 0), 0
+      )
+      const totalSalesAmount = (salesData || []).reduce(
+        (sum: number, s: any) => sum + Number(s.amount || 0), 0
+      )
+
+      // Fetch ALL payouts for this agent (not just payoutHistory)
+      const { data: payoutsData, error: payoutsError } = await supabase
         .from("payouts")
         .select("*")
         .eq("shop_id", shopId)
@@ -62,10 +87,20 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
         .eq("person_type", "agent")
         .order("payment_date", { ascending: false })
 
-      if (error) throw error
-      setAdvances(data || [])
+      if (payoutsError) throw payoutsError
+
+      const totalPayouts = (payoutsData || []).reduce(
+        (sum: number, p: any) => sum + Number(p.amount_paid || 0), 0
+      )
+
+      const pending = totalCommission - totalPayouts
+
+      setTotalSales(totalSalesAmount)
+      setTotalPaid(totalPayouts)
+      setPendingCommission(pending)
+      setPayoutHistory(payoutsData || [])
     } catch (error) {
-      console.error(error)
+      console.error("calculateCommission error:", error)
     }
   }
 
@@ -132,10 +167,10 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
 
   if (!agent) return null
 
-  const pending = Number(agent.pending_commission || 0)
+  const pending = Number(pendingCommission || 0)
   const totalCommission = Number(agent.total_commission || 0)
   const isCleared = pending === 0 && totalCommission > 0
-  const totalAdvance = advances.reduce((sum, a) => sum + Number(a.amount_paid || 0), 0)
+  const totalAdvance = payoutHistory.reduce((sum, a) => sum + Number(a.amount_paid || 0), 0)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -224,7 +259,7 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
                 </div>
                 {totalAdvance > 0 ? (
                   <div className="space-y-2">
-                    {advances.map((adv) => (
+                    {payoutHistory.map((adv) => (
                       <div key={adv.id} className="flex justify-between text-sm">
                         <span>{new Date(adv.payment_date).toLocaleDateString()}</span>
                         <span className="font-medium">₹{Number(adv.amount_paid).toLocaleString()}</span>
@@ -237,7 +272,7 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-amber-700">No advances taken.</p>
+                  <p className="text-sm text-amber-700">No payoutHistory taken.</p>
                 )}
               </div>
             </div>
