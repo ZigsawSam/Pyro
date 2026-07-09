@@ -1,7 +1,11 @@
 import { createClient } from "@supabase/supabase-js"
 
+let agentClient: ReturnType<typeof createClient> | null = null
+
 export function createAgentClient() {
-  return createClient(
+  if (agentClient) return agentClient
+  
+  agentClient = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -13,4 +17,5 @@ export function createAgentClient() {
       }
     }
   )
+  return agentClient
 }
