@@ -82,7 +82,7 @@ export default function AgentDashboardPage() {
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        router.push("/auth/agent-login")
+        router.push("/auth/shop-login")
         return
       }
       const { data: agent } = await supabase
@@ -92,7 +92,7 @@ export default function AgentDashboardPage() {
         .single()
       
       if (!agent) {
-        router.push("/auth/agent-login")
+        router.push("/auth/shop-login")
         return
       }
       
