@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Loader2, Plus, Phone, User } from "lucide-react"
-import { createDataClient } from "@/lib/supabase/data-client"
+import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 import { StaffProfileDialog } from "@/components/staff/staff-profile-dialog"
 import { PayStaffDialog } from "@/components/staff/pay-staff-dialog"
@@ -27,7 +27,7 @@ interface StaffMember {
 
 export default function ShopStaffPage() {
   const router = useRouter()
-  const supabase = createDataClient()
+  const supabase = createShopClient()
   const params = useParams()
   const shopId = Number(params?.shopId)
   const [staff, setStaff] = useState<StaffMember[]>([])
