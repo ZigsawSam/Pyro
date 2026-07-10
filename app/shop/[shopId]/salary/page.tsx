@@ -112,7 +112,7 @@ export default function ShopSalaryPage() {
       }, {})
 
       const advancesByStaff = (advancesData || []).reduce((acc: any, a: any) => {
-        acc[a.person_id] = (acc[a.person_id] || 0) + Number(a.amount_paid || 0)
+        acc[a.staff_id] = (acc[a.staff_id] || 0) + Number(a.amount_paid || 0)
         return acc
       }, {})
 
@@ -123,7 +123,7 @@ export default function ShopSalaryPage() {
 
         let finalPayable = 0
         if (s.salary_type === "monthly") {
-          finalPayable = Number(s.base_salary || 0) - advances
+          const dailyWage = Number(s.base_salary || 0) / 30; finalPayable = (dailyWage * presentDays) - advances
         } else if (s.salary_type === "daily") {
           finalPayable = (Number(s.base_salary || 0) * presentDays) - advances
         } else if (s.salary_type === "hourly") {
