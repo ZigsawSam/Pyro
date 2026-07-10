@@ -1,9 +1,9 @@
 "use client"
 
 import { useParams } from "next/navigation"
-import { Input } from "@/components/ui/input"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Loader2, IndianRupee, Calendar } from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
