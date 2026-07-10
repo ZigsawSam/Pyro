@@ -1,214 +1,137 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
-  Store,
   Users,
-  ShoppingCart,
-  Receipt,
-  BarChart3,
+  Briefcase,
+  Clock,
+  Wallet,
   FileText,
+  Menu,
+  X,
   ChevronDown,
-  ChevronRight,
   LogOut,
-  User,
   Settings,
-  Package,
-  CreditCard,
+  User,
 } from "lucide-react"
+import { useState } from "react"
 
 interface ShopSidebarProps {
-  shopName?: string
   shopId?: number
+  shopName?: string
+  userName?: string
 }
 
-const navSections = [
-  {
-    title: "MAIN",
-    items: [
-      { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-    ],
-  },
-  {
-    title: "BUSINESS",
-    items: [
-      { label: "My Shop", icon: Store, href: "/shop" },
-      { label: "Products", icon: Package, href: "/products" },
-      { label: "Sales", icon: ShoppingCart, href: "/sales" },
-      { label: "Agents", icon: Users, href: "/agents" },
-    ],
-  },
-  {
-    title: "FINANCE",
-    items: [
-      { label: "Transactions", icon: CreditCard, href: "/transactions" },
-      { label: "Invoices", icon: Receipt, href: "/invoices" },
-      {
-        label: "Reports",
-        icon: FileText,
-        href: "/reports",
-        children: [
-          { label: "Sales Report", href: "/reports/sales" },
-          { label: "Commission Report", href: "/reports/commission" },
-          { label: "Inventory Report", href: "/reports/inventory" },
-        ],
-      },
-    ],
-  },
-  {
-    title: "ANALYTICS",
-    items: [
-      { label: "Analytics", icon: BarChart3, href: "/analytics" },
-    ],
-  },
-]
-
-export function ShopSidebar({ shopName = "My Shop", shopId }: ShopSidebarProps) {
+export function ShopSidebar({ shopId, shopName, userName }: ShopSidebarProps) {
   const pathname = usePathname()
-  const [expanded, setExpanded] = useState<string | null>("Reports")
+  const [isOpen, setIsOpen] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/")
-
-  const initials = shopName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2)
-
-  const handleLogout = () => {
-    window.location.href = "/auth/logout"
-  }
+  const links = shopId
+    ? [
+        { href: `/shop/${shopId}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
+        { href: `/shop/${shopId}/agents`, label: "Agents", icon: Users },
+        { href: `/shop/${shopId}/sales`, label: "Sales", icon: Briefcase },
+        { href: `/shop/${shopId}/staff`, label: "Staff & Payroll", icon: Users },
+        { href: `/shop/${shopId}/attendance`, label: "Attendance", icon: Clock },
+        { href: `/shop/${shopId}/payouts`, label: "Payouts", icon: Wallet },
+        { href: `/shop/${shopId}/reports`, label: "Reports", icon: FileText },
+      ]
+    : []
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[240px] bg-[#0f172a] text-white flex flex-col z-50">
-      {/* Logo */}
-      <div className="p-5 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-lg">
-          P
+    <>
+      {/* Mobile menu button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-card border border-border shadow-sm hover:bg-secondary transition-colors"
+      >
+        {isOpen ? <X size={20} /> : <Menu size={20} />}
+      </button>
+
+      {/* Sidebar overlay for mobile */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 lg:hidden animate-fade-in"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed left-0 top-0 bottom-0 w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-300 ease-out z-40 overflow-y-auto ${
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
+        <div className="p-6 border-b border-sidebar-border">
+          <h1 className="text-2xl font-bold text-sidebar-primary tracking-tight">PayPro</h1>
+          <p className="text-sm text-sidebar-foreground/60 mt-1">Shop Dashboard</p>
         </div>
-        <div>
-          <p className="font-semibold text-sm leading-tight">PayPro</p>
-          <p className="text-[11px] text-slate-400">Shop Portal</p>
-        </div>
-      </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-4">
-        {navSections.map((section) => (
-          <div key={section.title}>
-            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-3 mb-1.5">
-              {section.title}
-            </p>
-            <div className="space-y-0.5">
-              {section.items.map((item) => {
-                const active = isActive(item.href)
-                const hasChildren = item.children && item.children.length > 0
-                const isExpanded = expanded === item.label
+        <nav className="p-4">
+          {links.map(({ href, label, icon: Icon }) => {
+            const isActive = pathname === href || pathname?.startsWith(href + "/")
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setIsOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-1.5 transition-all duration-200 ${
+                  isActive
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/20"
+                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                }`}
+              >
+                <Icon size={18} className={isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/60"} />
+                <span className="text-sm font-medium">{label}</span>
+                {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-sidebar-primary-foreground" />}
+              </Link>
+            )
+          })}
+        </nav>
 
-                return (
-                  <div key={item.label}>
-                    <Link
-                      href={item.href}
-                      onClick={(e) => {
-                        if (hasChildren) {
-                          e.preventDefault()
-                          setExpanded(isExpanded ? null : item.label)
-                        }
-                      }}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative ${
-                        active
-                          ? "bg-emerald-600 text-white font-medium"
-                          : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                      }`}
-                    >
-                      <item.icon size={18} />
-                      <span className="flex-1">{item.label}</span>
-                      {hasChildren && (
-                        <span className="text-slate-400">
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </span>
-                      )}
-                    </Link>
-
-                    {/* Submenu */}
-                    {hasChildren && isExpanded && (
-                      <div className="ml-6 mt-0.5 space-y-0.5 border-l border-slate-700 pl-3">
-                        {item.children.map((child) => {
-                          const childActive = pathname === child.href
-                          return (
-                            <Link
-                              key={child.label}
-                              href={child.href}
-                              className={`block px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                                childActive
-                                  ? "text-emerald-400 font-medium"
-                                  : "text-slate-400 hover:text-slate-200"
-                              }`}
-                            >
-                              {child.label}
-                            </Link>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+        {/* User info at bottom with dropdown */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border/50">
+          <button
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="flex items-center gap-3 w-full hover:bg-sidebar-accent rounded-xl p-2 transition-colors"
+          >
+            <div className="w-8 h-8 rounded-full bg-sidebar-primary/20 flex items-center justify-center">
+              <span className="text-xs font-bold text-sidebar-primary">
+                {(userName || "U").charAt(0).toUpperCase()}
+              </span>
             </div>
-          </div>
-        ))}
-      </nav>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="text-sm font-medium truncate">{userName || "User"}</p>
+              <p className="text-xs text-sidebar-foreground/50">Shop Owner</p>
+            </div>
+            <ChevronDown size={14} className={`text-sidebar-foreground/50 transition-transform ${showUserMenu ? "rotate-180" : ""}`} />
+          </button>
 
-      {/* User Card with Dropdown */}
-      <div className="p-3 relative">
-        <button
-          onClick={() => setShowUserMenu(!showUserMenu)}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors"
-        >
-          <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-xs font-bold">
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0 text-left">
-            <p className="text-sm font-medium truncate">{shopName}</p>
-            <p className="text-[11px] text-slate-400">Shop ID: {shopId || "—"}</p>
-          </div>
-          <ChevronDown size={14} className={`text-slate-400 transition-transform ${showUserMenu ? "rotate-180" : ""}`} />
-        </button>
-
-        {showUserMenu && (
-          <div className="absolute bottom-full left-3 right-3 mb-2 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
-            <Link
-              href="/profile"
-              className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-              onClick={() => setShowUserMenu(false)}
-            >
-              <User size={16} className="text-slate-400" />
-              Profile
-            </Link>
-            <Link
-              href="/settings"
-              className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-              onClick={() => setShowUserMenu(false)}
-            >
-              <Settings size={16} className="text-slate-400" />
-              Settings
-            </Link>
-            <div className="border-t border-slate-100" />
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
-            >
-              <LogOut size={16} />
-              Logout
-            </button>
-          </div>
-        )}
-      </div>
-    </aside>
+          {showUserMenu && (
+            <div className="mt-2 bg-sidebar-accent rounded-xl overflow-hidden">
+              <Link
+                href="/settings"
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-primary/10 transition-colors"
+                onClick={() => setShowUserMenu(false)}
+              >
+                <Settings size={14} /> Settings
+              </Link>
+              <button
+                onClick={() => {
+                  setShowUserMenu(false)
+                  window.location.href = "/auth/logout"
+                }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <LogOut size={14} /> Logout
+              </button>
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
   )
 }
