@@ -61,7 +61,6 @@ export default function ShopStaffPage() {
   const fetchStaff = async () => {
     setLoading(true)
     try {
-      // Fetch staff
       const { data: staffData, error: staffError } = await supabase
         .from("staff")
         .select("id, name, phone, role, salary_type, base_salary, working_hours_per_day, overtime_rate, is_active, account_name, account_number, bank_name, ifsc_code, upi_id")
@@ -75,7 +74,6 @@ export default function ShopStaffPage() {
       const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
       const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`
 
-      // Fetch attendance
       const { data: attendanceData } = await supabase
         .from("attendance")
         .select("staff_id, status, work_hours, overtime_hours")
@@ -101,7 +99,6 @@ export default function ShopStaffPage() {
       })
       setAttendanceSummary(summary)
 
-      // Fetch payouts
       const { data: payoutData } = await supabase
         .from("payouts")
         .select("staff_id, amount_paid")
@@ -122,7 +119,6 @@ export default function ShopStaffPage() {
     }
   }
 
-  // Same pattern as agent: pending = calculated salary - total payouts
   const calculatePendingSalary = (member: StaffMember) => {
     const summary = attendanceSummary[member.id]
     if (!summary) return 0
@@ -167,14 +163,17 @@ export default function ShopStaffPage() {
 
   return (
     <MainLayout title="Staff" shopId={shopId}>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Staff</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">Staff</h1>
+          <p className="text-sm text-muted-foreground">Manage staff and payroll</p>
+        </div>
         <Button onClick={handleAddStaff}>
           <Plus className="mr-2 h-4 w-4" /> Add Staff
         </Button>
       </div>
 
-      <div className="relative">
+      <div className="relative mb-6">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search staff..."
@@ -189,41 +188,46 @@ export default function ShopStaffPage() {
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredStaff.map((member) => {
             const pendingSalary = calculatePendingSalary(member)
             const summary = attendanceSummary[member.id]
 
             return (
-              <Card key={member.id} className="p-4 group">
-                <div className="flex items-center justify-between">
+              <Card key={member.id} className="p-5 card-hover cursor-pointer group" onClick={() => openProfile(member)}>
+                <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <UserCircle className="h-10 w-10 text-muted-foreground" />
                     <div>
-                      <p className="font-medium">{member.name}</p>
+                      <p className="font-semibold text-base">{member.name}</p>
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <Phone className="h-3 w-3" /> {member.phone}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {member.role} • {member.salary_type} • ₹{Number(member.base_salary).toLocaleString()}
-                      </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold">₹{pendingSalary.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">pending</p>
-                    {summary && (
-                      <p className="text-xs text-muted-foreground">
-                        {summary.present_days}P {summary.half_days}H • {summary.total_hours}hrs
-                      </p>
-                    )}
+                </div>
+
+                <p className="text-sm text-muted-foreground mb-4">
+                  {member.role} • {member.salary_type} • ₹{Number(member.base_salary).toLocaleString()}
+                </p>
+
+                {/* Pending/Paid summary - same as agent cards */}
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center justify-between py-2 px-3 bg-secondary/50 rounded-lg">
+                    <span className="text-sm font-medium">Pending</span>
+                    <span className="text-sm font-bold text-amber-600">₹{pendingSalary.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 px-3 bg-secondary/30 rounded-lg">
+                    <span className="text-sm font-medium">Paid</span>
+                    <span className="text-sm text-muted-foreground">₹{(payoutsMap[member.id] || 0).toLocaleString()}</span>
                   </div>
                 </div>
-                <div className="flex gap-2 mt-3">
-                  <Button variant="outline" size="sm" onClick={() => openProfile(member)}>
+
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={(e) => { e.stopPropagation(); openProfile(member) }}>
                     <UserRound className="mr-1 h-3 w-3" /> Profile
                   </Button>
-                  <Button size="sm" onClick={() => openPay(member)} disabled={pendingSalary === 0}>
+                  <Button size="sm" className="flex-1" onClick={(e) => { e.stopPropagation(); openPay(member) }} disabled={pendingSalary === 0}>
                     <CreditCard className="mr-1 h-3 w-3" /> Pay
                   </Button>
                 </div>
@@ -231,7 +235,7 @@ export default function ShopStaffPage() {
             )
           })}
           {filteredStaff.length === 0 && (
-            <p className="text-center text-muted-foreground py-8">No staff found.</p>
+            <p className="text-center text-muted-foreground py-8 col-span-full">No staff found.</p>
           )}
         </div>
       )}

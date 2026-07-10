@@ -1,457 +1,233 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
-import Link from "next/link"
-import { MainLayout } from "@/components/layout/main-layout"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { AddAgentDialog } from "@/components/agents/add-agent-dialog"
+import { Loader2, Plus, Search, Phone, UserCircle, CreditCard, UserRound } from "lucide-react"
+import { createShopClient } from "@/lib/supabase/shop-client"
+import { MainLayout } from "@/components/layout/main-layout"
 import { AgentProfileDialog } from "@/components/agents/agent-profile-dialog"
 import { PayAgentDialog } from "@/components/agents/pay-agent-dialog"
-import { Plus, CreditCard, UserRound, CheckCircle2, UserPlus, Bell, Search, ArrowRight, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react"
-import { createShopClient } from "@/lib/supabase/shop-client"
 
-interface ShopAgent {
-  link_id: number
+interface Agent {
   id: number
   name: string
   phone_number: string
   description?: string
   commission_rate: number
-  total_sales: number
-  total_commission: number
-  pending_commission: number
-  paid_commission: number
   account_name?: string
   account_number?: string
   bank_name?: string
   ifsc_code?: string
   upi_id?: string
+  link_id: number
+  total_commission?: number
+  pending_commission?: number
+  paid_commission?: number
 }
 
-interface AgentRequest {
-  id: number
-  agent_name: string
-  agent_phone: string
-  commission_rate: number
-  status: string
-  requested_by: string
-  requested_at: string
-  _source?: "agent_requests" | "agent_link_requests"
-}
-
-export default function AgentsPage() {
-  const params = useParams()
-  const rawShopId = Array.isArray(params.shopId) ? params.shopId[0] : params.shopId
-  const shopId = Number(rawShopId)
+export default function ShopAgentsPage() {
+  const router = useRouter()
   const supabase = createShopClient()
-  const [agents, setAgents] = useState<ShopAgent[]>([])
-  const [requests, setRequests] = useState<AgentRequest[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [showDialog, setShowDialog] = useState(false)
+  const [shopId, setShopId] = useState<number | null>(null)
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [showPayDialog, setShowPayDialog] = useState(false)
-  const [showExistingDialog, setShowExistingDialog] = useState(false)
-  const [showRequestsPanel, setShowRequestsPanel] = useState(false)
-  const [selectedAgent, setSelectedAgent] = useState<ShopAgent | null>(null)
-  const [isMounted, setIsMounted] = useState(false)
-  
-  // Existing agent form
-  const [existingPhone, setExistingPhone] = useState("")
-  const [existingRate, setExistingRate] = useState("")
-  const [existingMessage, setExistingMessage] = useState("")
-  const [existingAgentData, setExistingAgentData] = useState<any>(null)
-  const [searchingExisting, setSearchingExisting] = useState(false)
-  const [sendingRequest, setSendingRequest] = useState(false)
 
-  useEffect(() => { setIsMounted(true) }, [])
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push("/auth/login"); return }
 
-  const fetchAgents = async () => {
+      const { data: shop } = await supabase
+        .from("shops")
+        .select("id")
+        .eq("user_id", user.id)
+        .single()
+
+      if (!shop) { router.push("/auth/login"); return }
+      setShopId(shop.id)
+      fetchAgents(shop.id)
+    }
+    init()
+  }, [router, supabase])
+
+  const fetchAgents = async (sid: number) => {
+    setLoading(true)
     try {
-      // Fetch shop_agents with agent details
-      const { data: shopAgentsData, error: shopAgentsError } = await supabase
+      const { data: links, error: linkError } = await supabase
         .from("shop_agents")
-        .select("id, agent_id, commission_rate, agents:agent_id(id, name, phone_number, description, account_name, account_number, bank_name, ifsc_code, upi_id)")
-        .eq("shop_id", shopId)
+        .select("id, agent_id, commission_rate")
+        .eq("shop_id", sid)
 
-      if (shopAgentsError) {
-        console.error("shop_agent error:", shopAgentsError)
-        throw shopAgentsError
-      } 
+      if (linkError) throw linkError
+      if (!links || links.length === 0) { setAgents([]); setLoading(false); return }
 
-      console.log("shopAgentsData:", shopAgentsData)
-      // Fetch all sales for this shop to calculate totals
+      const agentIds = links.map((l) => l.agent_id)
+      const { data: agentsData, error: agentError } = await supabase
+        .from("agents")
+        .select("id, name, phone_number, description, account_name, account_number, bank_name, ifsc_code, upi_id")
+        .in("id", agentIds)
+
+      if (agentError) throw agentError
+
+      // Fetch sales and payouts for each agent
       const { data: salesData } = await supabase
         .from("sales")
         .select("agent_id, amount, commission_amount")
-        .eq("shop_id", shopId)
+        .eq("shop_id", sid)
+        .in("agent_id", agentIds)
 
-      // Fetch all payouts for this shop
       const { data: payoutsData } = await supabase
         .from("payouts")
         .select("agent_id, amount_paid")
-        .eq("shop_id", shopId)
+        .eq("shop_id", sid)
         .eq("person_type", "agent")
+        .in("agent_id", agentIds)
 
-      const salesByAgent: Record<number, { total_sales: number; total_commission: number }> = {}
-      ;(salesData || []).forEach((sale: any) => {
-        if (!salesByAgent[sale.agent_id]) {
-          salesByAgent[sale.agent_id] = { total_sales: 0, total_commission: 0 }
-        }
-        salesByAgent[sale.agent_id].total_sales += Number(sale.amount || 0)
-        salesByAgent[sale.agent_id].total_commission += Number(sale.commission_amount || 0)
+      const salesByAgent: Record<number, { total: number; commission: number }> = {}
+      ;(salesData || []).forEach((s: any) => {
+        if (!salesByAgent[s.agent_id]) salesByAgent[s.agent_id] = { total: 0, commission: 0 }
+        salesByAgent[s.agent_id].total += Number(s.amount || 0)
+        salesByAgent[s.agent_id].commission += Number(s.commission_amount || 0)
       })
 
-      const paidByAgent: Record<number, number> = {}
+      const payoutsByAgent: Record<number, number> = {}
       ;(payoutsData || []).forEach((p: any) => {
-        paidByAgent[p.agent_id] = (paidByAgent[p.agent_id] || 0) + Number(p.amount_paid || 0)
+        payoutsByAgent[p.agent_id] = (payoutsByAgent[p.agent_id] || 0) + Number(p.amount_paid || 0)
       })
 
-      const formattedAgents: ShopAgent[] = (shopAgentsData || []).map((link: any) => {
-        const agent = link.agents || {}
-        const stats = salesByAgent[link.agent_id] || { total_sales: 0, total_commission: 0 }
-        const paid = paidByAgent[link.agent_id] || 0
+      const formatted = (agentsData || []).map((agent: any) => {
+        const link = links.find((l) => l.agent_id === agent.id)
+        const totalCommission = salesByAgent[agent.id]?.commission || 0
+        const totalPaid = payoutsByAgent[agent.id] || 0
         return {
-          link_id: link.id,
-          id: link.agent_id,
-          name: agent.name || "Unknown",
-          phone_number: agent.phone_number || "",
-          description: agent.description || "",
-          commission_rate: link.commission_rate || 0,
-          total_sales: stats.total_sales,
-          total_commission: stats.total_commission,
-          pending_commission: stats.total_commission - paid,
-          paid_commission: paid,
-          account_name: agent.account_name,
-          account_number: agent.account_number,
-          bank_name: agent.bank_name,
-          ifsc_code: agent.ifsc_code,
-          upi_id: agent.upi_id,
+          ...agent,
+          link_id: link?.id,
+          commission_rate: link?.commission_rate || 0,
+          total_commission: totalCommission,
+          pending_commission: Math.max(0, totalCommission - totalPaid),
+          paid_commission: totalPaid,
         }
       })
 
-      setAgents(formattedAgents)
-    } catch (error) {
-      console.error("Error fetching agents:", error)
-      alert("Failed to load agents: " + (error as any).message)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const fetchRequests = async () => {
-    try {
-      const [{ data: shopRequests, error: shopError }, { data: agentRequests, error: agentError }] = await Promise.all([
-        supabase.from("agent_requests").select("*").eq("shop_id", shopId).order("requested_at", { ascending: false }),
-        supabase.from("agent_link_requests").select("*").eq("shop_id", shopId).order("requested_at", { ascending: false })
-      ])
-      if (shopError) throw shopError
-      if (agentError) throw agentError
-      const merged = [
-        ...(shopRequests || []).map((r: any) => ({ ...r, _source: "agent_requests" as const })),
-        ...(agentRequests || []).map((r: any) => ({ ...r, _source: "agent_link_requests" as const, requested_at: r.created_at }))
-      ].sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime())
-      setRequests(merged)
+      setAgents(formatted)
     } catch (e) { console.error(e) }
+    finally { setLoading(false) }
   }
 
-  useEffect(() => {
-    if (!isMounted) return
-    fetchAgents()
-    fetchRequests()
-  }, [shopId, isMounted])
+  const filteredAgents = agents.filter(
+    (a) =>
+      a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.phone_number?.includes(searchQuery)
+  )
 
-  const searchExistingAgent = async () => {
-    if (!existingPhone) return
-    setSearchingExisting(true)
-    try {
-      const { data: agents, error } = await supabase
-        .from("agents")
-        .select("id, name, phone_number, description, upi_id, account_name, account_number, bank_name, ifsc_code, is_active, current_tier_id, shop_id, user_id")
-        .eq("phone_number", existingPhone)
-        .limit(1)
+  const openProfile = (agent: Agent) => { setSelectedAgent(agent); setShowProfile(true) }
+  const openPay = (agent: Agent) => { setSelectedAgent(agent); setShowPayDialog(true) }
 
-      if (error) throw error
-
-      if (agents && agents.length > 0) {
-        setExistingAgentData(agents[0])
-      } else {
-        alert("No agent found with this phone number")
-        setExistingAgentData(null)
-      }
-    } catch (e) { 
-      alert("Search failed") 
-    }
-    finally { setSearchingExisting(false) }
-  }
-
-  const sendExistingRequest = async () => {
-    if (!existingAgentData || !existingRate) return
-    setSendingRequest(true)
-    try {
-      // Create an agent_request entry
-      const { error } = await supabase
-        .from("agent_requests")
-        .insert({
-          shop_id: shopId,
-          agent_id: existingAgentData.id,
-          agent_name: existingAgentData.name,
-          agent_phone: existingAgentData.phone_number,
-          commission_rate: Number(existingRate),
-          message: existingMessage,
-          status: "pending",
-          requested_by: "shop",
-        })
-
-      if (error) throw error
-
-      setShowExistingDialog(false)
-      setExistingPhone("")
-      setExistingRate("")
-      setExistingMessage("")
-      setExistingAgentData(null)
-      fetchRequests()
-      alert("Request sent to agent!")
-    } catch (e) { alert("Failed to send request") }
-    finally { setSendingRequest(false) }
-  }
-
-  const openProfile = (agent: ShopAgent) => {
-    setSelectedAgent(agent)
-    setShowProfile(true)
-  }
-
-  const openPay = (agent: ShopAgent) => {
-    setSelectedAgent(agent)
-    setShowPayDialog(true)
-  }
-
-  const pendingCount = requests.filter(r => r.status === 'pending').length
-  const closedCount = requests.filter(r => r.status === 'approved' || r.status === 'rejected').length
-
-  if (!isMounted) {
+  if (!shopId) {
     return (
-      <MainLayout title="Agents" shopId={shopId}>
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-        </div>
-      </MainLayout>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
     )
   }
 
   return (
     <MainLayout title="Agents" subtitle="Manage agents for your shop" shopId={shopId}>
-      {/* Top Actions */}
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">Tap an agent to review their profile, or hover a card to pay them.</p>
-        <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => setShowExistingDialog(true)}>
-            <UserPlus size={18} /> Existing Agent
-          </Button>
-          <Button variant="outline" className="gap-2 relative" onClick={() => setShowRequestsPanel(true)}>
-            <Bell size={18} /> Requests
-            {pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-                {pendingCount}
-              </span>
-            )}
-          </Button>
-          <Button onClick={() => setShowDialog(true)} className="gap-2">
-            <Plus size={18} /> Add Agent
-          </Button>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">Agents</h1>
+          <p className="text-sm text-muted-foreground">Tap an agent to review their profile, or hover a card to pay them.</p>
         </div>
+        <Button onClick={() => router.push(`/shop/${shopId}/agents/add`)}>
+          <Plus className="mr-2 h-4 w-4" /> Add Agent
+        </Button>
       </div>
 
-      {/* Agent Cards */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {agents.map((agent) => {
-          const pending = Number(agent.pending_commission || 0)
-          const paid = Number(agent.paid_commission || 0)
-          const totalCommission = Number(agent.total_commission || 0)
-          const isCleared = pending === 0 && totalCommission > 0
+      <div className="relative mb-6">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search agents..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+      </div>
 
-          return (
-            <Card key={agent.link_id} className="group relative h-full p-5 transition hover:shadow-lg">
-              <div className="flex items-start justify-between gap-3">
-                <button className="text-left flex-1" onClick={() => openProfile(agent)}>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold">{agent.name}</h3>
-                    {isCleared && <CheckCircle2 className="h-5 w-5 text-green-600" />}
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredAgents.map((agent) => (
+            <Card key={agent.id} className="p-5 card-hover cursor-pointer group" onClick={() => openProfile(agent)}>
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <UserCircle className="h-10 w-10 text-muted-foreground" />
+                  <div>
+                    <p className="font-semibold text-base">{agent.name}</p>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Phone className="h-3 w-3" /> {agent.phone_number || "No phone"}
+                    </p>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">{agent.description || "No description added yet."}</p>
-                </button>
-                <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                  <Button size="sm" variant="outline" onClick={() => openPay(agent)}>
-                    <CreditCard className="mr-2 h-4 w-4" /> Pay
-                  </Button>
                 </div>
               </div>
 
-              <div className="mt-4 rounded-lg border bg-muted/30 overflow-hidden">
-                <div className="flex items-center justify-between border-b border-border p-3">
+              <p className="text-sm text-muted-foreground mb-4">
+                {agent.description || "No description added yet."}
+              </p>
+
+              {/* Pending/Paid summary */}
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center justify-between py-2 px-3 bg-secondary/50 rounded-lg">
                   <span className="text-sm font-medium">Pending</span>
-                  <span className="text-lg font-bold text-amber-600">₹{pending.toLocaleString()}</span>
+                  <span className="text-sm font-bold text-amber-600">₹{Number(agent.pending_commission || 0).toLocaleString()}</span>
                 </div>
-                <div className="flex items-center justify-between p-3">
+                <div className="flex items-center justify-between py-2 px-3 bg-secondary/30 rounded-lg">
                   <span className="text-sm font-medium">Paid</span>
-                  <span className="text-sm">₹{paid.toLocaleString()}</span>
+                  <span className="text-sm text-muted-foreground">₹{Number(agent.paid_commission || 0).toLocaleString()}</span>
                 </div>
-                {isCleared && (
-                  <div className="flex items-center justify-center gap-1 border-t border-border bg-emerald-50 p-2 text-emerald-600 font-bold">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span className="text-xs">All Cleared</span>
-                  </div>
-                )}
               </div>
 
-              <Button variant="ghost" className="mt-4 w-full justify-start gap-2" onClick={() => openProfile(agent)}>
-                <UserRound className="h-4 w-4" /> View Profile
-              </Button>
-            </Card>
-          )
-        })}
-      </div>
-
-      {agents.length === 0 && !isLoading ? (
-        <Card className="mt-6 p-8 text-center text-muted-foreground">No agents are linked yet. Add one to start payouts.</Card>
-      ) : null}
-
-      {/* Existing Agent Dialog */}
-      <Dialog open={showExistingDialog} onOpenChange={setShowExistingDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Add Existing Agent</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Input 
-                placeholder="Agent phone number" 
-                value={existingPhone}
-                onChange={(e) => setExistingPhone(e.target.value)}
-              />
-              <Button onClick={searchExistingAgent} disabled={searchingExisting || !existingPhone}>
-                {searchingExisting ? <Loader2 className="animate-spin" /> : <Search className="h-4 w-4" />}
-              </Button>
-            </div>
-            
-            {existingAgentData && (
-              <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <UserRound className="h-5 w-5" />
-                  <p className="font-medium">{existingAgentData.name}</p>
-                </div>
-                <p className="text-sm text-muted-foreground">{existingAgentData.phone_number}</p>
-                {existingAgentData.description && <p className="text-sm">{existingAgentData.description}</p>}
-                {existingAgentData.upi_id && <p className="text-sm text-muted-foreground">UPI: {existingAgentData.upi_id}</p>}
-                
-                <div>
-                  <label className="block text-sm font-medium mb-1">Commission Rate (%)</label>
-                  <Input 
-                    type="number" 
-                    step="0.1" 
-                    placeholder="5.0"
-                    value={existingRate}
-                    onChange={(e) => setExistingRate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Message (optional)</label>
-                  <Input 
-                    placeholder="Invite message..."
-                    value={existingMessage}
-                    onChange={(e) => setExistingMessage(e.target.value)}
-                  />
-                </div>
-                <Button onClick={sendExistingRequest} disabled={sendingRequest || !existingRate} className="w-full">
-                  {sendingRequest ? <Loader2 className="animate-spin mr-2" /> : null}
-                  Send Request
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1" onClick={(e) => { e.stopPropagation(); openProfile(agent) }}>
+                  <UserRound className="mr-1 h-3 w-3" /> Profile
+                </Button>
+                <Button size="sm" className="flex-1" onClick={(e) => { e.stopPropagation(); openPay(agent) }} disabled={!agent.pending_commission || agent.pending_commission <= 0}>
+                  <CreditCard className="mr-1 h-3 w-3" /> Pay
                 </Button>
               </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+            </Card>
+          ))}
+          {filteredAgents.length === 0 && (
+            <p className="text-center text-muted-foreground py-8 col-span-full">No agents found.</p>
+          )}
+        </div>
+      )}
 
-      {/* Requests Panel Dialog */}
-      <Dialog open={showRequestsPanel} onOpenChange={setShowRequestsPanel}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Agent Requests</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            {/* Pending */}
-            <div>
-              <h3 className="text-sm font-semibold text-amber-600 mb-2 flex items-center gap-2">
-                <Clock className="h-4 w-4" /> Pending ({pendingCount})
-              </h3>
-              {requests.filter(r => r.status === 'pending').map((req) => (
-                <Card key={req.id} className="p-3 mb-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{req.agent_name}</p>
-                      <p className="text-sm text-muted-foreground">{req.agent_phone}</p>
-                      <p className="text-sm">Rate: {req.commission_rate}% | {req.requested_by === 'agent' ? 'They requested' : 'You invited'}</p>
-                    </div>
-                    <Link href={`/shop/${shopId}/agents/requests`}>
-                      <Button size="sm" variant="outline">Review</Button>
-                    </Link>
-                  </div>
-                </Card>
-              ))}
-              {pendingCount === 0 && <p className="text-sm text-muted-foreground">No pending requests</p>}
-            </div>
-
-            {/* Closed */}
-            {closedCount > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4" /> Closed ({closedCount})
-                </h3>
-                {requests.filter(r => r.status === 'approved' || r.status === 'rejected').map((req) => (
-                  <Card key={req.id} className="p-3 mb-2 opacity-60 bg-muted/20">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">{req.agent_name}</p>
-                        <p className="text-sm text-muted-foreground">{req.agent_phone}</p>
-                        <p className="text-sm">Rate: {req.commission_rate}%</p>
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        req.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {req.status === 'approved' ? 'Accepted' : 'Rejected'}
-                      </span>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <AddAgentDialog open={showDialog} onOpenChange={setShowDialog} onAgentAdded={fetchAgents} shopId={shopId} />
       <AgentProfileDialog
-  open={showProfile}
-  onOpenChange={setShowProfile}
-  shopId={shopId}
-  agent={selectedAgent}
-  onUpdated={() => {
-    fetchAgents()  // Refresh the entire agents list
-    setSelectedAgent(null)
-  }}
-  onDeleted={() => {
-    fetchAgents()
-    setSelectedAgent(null)
-  }}
-/>
-      <PayAgentDialog 
-        open={showPayDialog} 
-        onOpenChange={setShowPayDialog} 
-        shopId={shopId} 
-        agent={selectedAgent} 
-        onPaid={() => {
-          fetchAgents()
-          setShowPayDialog(false)
-        }} 
-      />    </MainLayout>
+        open={showProfile}
+        onOpenChange={setShowProfile}
+        shopId={shopId}
+        agent={selectedAgent}
+        onUpdated={() => { setShowProfile(false); if (shopId) fetchAgents(shopId) }}
+        onDeleted={() => { setShowProfile(false); if (shopId) fetchAgents(shopId) }}
+      />
+
+      <PayAgentDialog
+        open={showPayDialog}
+        onOpenChange={setShowPayDialog}
+        shopId={shopId}
+        agent={selectedAgent}
+        onPaid={() => { setShowPayDialog(false); if (shopId) fetchAgents(shopId) }}
+      />
+    </MainLayout>
   )
 }

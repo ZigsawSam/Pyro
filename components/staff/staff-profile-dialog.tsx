@@ -67,14 +67,12 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
     }
   }, [open])
 
-  // Same pattern as agent: calculate from attendance + payouts
   const calculatePayroll = async () => {
     if (!staff) return
     try {
       const now = new Date()
       const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
 
-      // Fetch attendance
       const { data: attData, error: attError } = await supabase
         .from("attendance")
         .select("status, work_hours, overtime_hours")
@@ -99,7 +97,6 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
         salary = ((staff.base_salary || 0) * totalHours) + ((staff.overtime_rate || 0) * totalOvertime)
       }
 
-      // Fetch payouts
       const { data: payoutsData, error: payoutsError } = await supabase
         .from("payouts")
         .select("*")
@@ -157,7 +154,7 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
 
   const handleDelete = async () => {
     if (!staff) return
-    if (!window.confirm("Remove this staff member from the shop while keeping payroll history?")) return
+    if (!window.confirm("Remove this staff member? Payroll history will be kept.")) return
     setIsDeleting(true)
     try {
       const { error } = await supabase
@@ -183,7 +180,7 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {staff.name}
@@ -199,11 +196,11 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
             </div>
             <div className="flex gap-2">
               {!isEditing ? (
-                <Button variant="outline" onClick={() => setIsEditing(true)}>
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                   <Pencil className="mr-2 h-4 w-4" /> Edit
                 </Button>
               ) : null}
-              <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+              <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isDeleting}>
                 {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                 Delete
               </Button>
@@ -277,6 +274,7 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Concise info box - same style as agent */}
               <div className="rounded-lg border bg-muted/20 p-4 text-sm space-y-2">
                 <p><span className="font-medium">Role:</span> {staff.role}</p>
                 <p><span className="font-medium">Salary Type:</span> {staff.salary_type}</p>
@@ -290,7 +288,7 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
                 {staff.upi_id ? <p><span className="font-medium">UPI:</span> {staff.upi_id}</p> : null}
               </div>
 
-              {/* Payout History / Advance Section */}
+              {/* Payout History - same style as agent "Advances Taken" */}
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Wallet className="h-4 w-4 text-amber-700" />
@@ -302,7 +300,7 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
                       <div key={payout.id} className="flex justify-between text-sm">
                         <span>{new Date(payout.payment_date).toLocaleDateString()}</span>
                         <span className="font-medium">₹{Number(payout.amount_paid).toLocaleString()}</span>
-                        <span className="text-muted-foreground">{payout.remarks || "Payout"}</span>
+                        <span className="text-muted-foreground text-xs">{payout.remarks || "Payout"}</span>
                       </div>
                     ))}
                     <div className="border-t border-amber-200 pt-2 flex justify-between font-bold text-amber-900">
