@@ -120,7 +120,7 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
           bank_name: formData.bank_name,
           ifsc_code: formData.ifsc_code,
           upi_id: formData.upi_id,
-        })
+        } as any)
         .eq("id", agent.id)
 
       if (agentError) throw agentError
@@ -128,7 +128,7 @@ export function AgentProfileDialog({ open, onOpenChange, shopId, agent, onUpdate
       // Update commission rate in shop_agents
       const { error: linkError } = await supabase
         .from("shop_agents")
-        .update({ commission_rate: Number.parseFloat(formData.commission_rate) })
+        .update({ commission_rate: Number.parseFloat(formData.commission_rate) } as any)
         .eq("id", agent.link_id)
         .eq("shop_id", shopId)
 
