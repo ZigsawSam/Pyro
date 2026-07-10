@@ -1,22 +1,21 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   Store,
-  BarChart3,
   Wallet,
   TrendingUp,
   FileText,
   Bell,
+  Settings,
   LogOut,
-  Menu,
-  X,
   ChevronDown,
-  Sparkles,
+  ChevronRight,
+  User,
 } from "lucide-react"
-import { useState } from "react"
 
 interface SidebarProps {
   shopId?: number
@@ -24,120 +23,179 @@ interface SidebarProps {
   userName?: string
 }
 
-export function Sidebar({ shopId, isAgent = false, userName }: SidebarProps) {
+const navSections = [
+  {
+    title: "MAIN",
+    items: [
+      { label: "Dashboard", icon: LayoutDashboard, href: "/agent/dashboard" },
+    ],
+  },
+  {
+    title: "WORK",
+    items: [
+      { label: "My Shops", icon: Store, href: "/agent/shops" },
+      {
+        label: "Earnings",
+        icon: Wallet,
+        href: "/agent/earnings",
+        children: [
+          { label: "Overview", href: "/agent/earnings" },
+          { label: "Commission History", href: "/agent/earnings/commissions" },
+          { label: "Payouts", href: "/agent/earnings/payouts" },
+          { label: "Statements", href: "/agent/earnings/statements" },
+        ],
+      },
+      { label: "Performance", icon: TrendingUp, href: "/agent/performance" },
+    ],
+  },
+  {
+    title: "ANALYTICS",
+    items: [
+      { label: "Reports", icon: FileText, href: "/agent/reports" },
+    ],
+  },
+  {
+    title: "ACCOUNT",
+    items: [
+      { label: "Notifications", icon: Bell, href: "/agent/notifications", badge: 3 },
+      { label: "Settings", icon: Settings, href: "/agent/settings" },
+    ],
+  },
+]
+
+export function Sidebar({ isAgent = false, userName = "Agent" }: SidebarProps) {
   const pathname = usePathname()
-  const [isOpen, setIsOpen] = useState(false)
-  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [expanded, setExpanded] = useState<string | null>("Earnings")
 
-  const agentLinks = [
-    { href: "/agent/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/agent/shops", label: "My Shops", icon: Store },
-    { href: "/agent/commissions", label: "Commissions", icon: BarChart3 },
-    { href: "/agent/payouts", label: "Payouts", icon: Wallet },
-    { href: "/agent/performance", label: "Performance", icon: TrendingUp },
-    { href: "/agent/reports", label: "Reports", icon: FileText },
-    { href: "/agent/notifications", label: "Notifications", icon: Bell },
-  ]
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/")
 
-  const shopLinks = shopId
-    ? [
-        { href: `/shop/${shopId}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
-        { href: `/shop/${shopId}/agents`, label: "Agents", icon: Store },
-        { href: `/shop/${shopId}/sales`, label: "Sales", icon: BarChart3 },
-        { href: `/shop/${shopId}/staff`, label: "Staff & Payroll", icon: Wallet },
-        { href: `/shop/${shopId}/payouts`, label: "Payouts", icon: Wallet },
-        { href: `/shop/${shopId}/reports`, label: "Reports", icon: FileText },
-      ]
-    : []
-
-  const links = isAgent ? agentLinks : shopLinks
+  const initials = userName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
 
   return (
-    <>
-      {/* Mobile menu button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-card border border-border shadow-sm hover:bg-secondary transition-colors"
-      >
-        {isOpen ? <X size={20} /> : <Menu size={20} />}
-      </button>
-
-      {/* Sidebar overlay for mobile */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 lg:hidden animate-fade-in"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
-
-      {/* Sidebar - Dark navy like reference */}
-      <aside
-        className={`fixed left-0 top-0 bottom-0 w-[240px] bg-[#0f172a] text-white transform transition-transform duration-300 ease-out z-40 overflow-y-auto ${
-          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
-      >
-        {/* Logo */}
-        <div className="p-5 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-            <span className="text-lg font-bold text-white">P</span>
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-white tracking-tight">PayPro</h1>
-            <p className="text-xs text-slate-400">Agent Portal</p>
-          </div>
+    <aside className="fixed left-0 top-0 h-screen w-[240px] bg-[#0f172a] text-white flex flex-col z-50">
+      {/* Logo */}
+      <div className="p-5 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-lg">
+          P
         </div>
-
-        {/* Nav */}
-        <nav className="px-3 py-2">
-          {links.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href || pathname?.startsWith(href + "/")
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg mb-0.5 transition-all duration-200 ${
-                  isActive
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-              >
-                <Icon size={18} className={isActive ? "text-white" : "text-slate-400"} />
-                <span className="text-sm font-medium">{label}</span>
-              </Link>
-            )
-          })}
-        </nav>
-
-        {/* User profile at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
-          <button
-            onClick={() => setUserMenuOpen(!userMenuOpen)}
-            className="flex items-center gap-3 w-full hover:bg-slate-800 rounded-lg p-2 transition-colors"
-          >
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
-              <span className="text-xs font-bold text-white">
-                {userName
-                  ? userName.split(" ").map((n) => n[0]).join("").toUpperCase()
-                  : "U"}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0 text-left">
-              <p className="text-sm font-medium text-white truncate">{userName || "User"}</p>
-              <p className="text-xs text-slate-400">{isAgent ? "Agent" : "Shop Owner"}</p>
-            </div>
-            <ChevronDown size={14} className="text-slate-400" />
-          </button>
-
-          {userMenuOpen && (
-            <div className="mt-2 bg-slate-800 rounded-lg overflow-hidden">
-              <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors">
-                <LogOut size={14} /> Logout
-              </button>
-            </div>
-          )}
+        <div>
+          <p className="font-semibold text-sm leading-tight">PayPro</p>
+          <p className="text-[11px] text-slate-400">Agent Portal</p>
         </div>
-      </aside>
-    </>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-4">
+        {navSections.map((section) => (
+          <div key={section.title}>
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-3 mb-1.5">
+              {section.title}
+            </p>
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                const active = isActive(item.href)
+                const hasChildren = item.children && item.children.length > 0
+                const isExpanded = expanded === item.label
+
+                return (
+                  <div key={item.label}>
+                    <Link
+                      href={item.href}
+                      onClick={(e) => {
+                        if (hasChildren) {
+                          e.preventDefault()
+                          setExpanded(isExpanded ? null : item.label)
+                        }
+                      }}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative ${
+                        active
+                          ? "bg-blue-600 text-white font-medium"
+                          : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                      }`}
+                    >
+                      <item.icon size={18} />
+                      <span className="flex-1">{item.label}</span>
+                      {item.badge && (
+                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                          {item.badge}
+                        </span>
+                      )}
+                      {hasChildren && (
+                        <span className="text-slate-400">
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </span>
+                      )}
+                    </Link>
+
+                    {/* Submenu */}
+                    {hasChildren && isExpanded && (
+                      <div className="ml-6 mt-0.5 space-y-0.5 border-l border-slate-700 pl-3">
+                        {item.children.map((child) => {
+                          const childActive = pathname === child.href
+                          return (
+                            <Link
+                              key={child.label}
+                              href={child.href}
+                              className={`block px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                                childActive
+                                  ? "text-blue-400 font-medium"
+                                  : "text-slate-400 hover:text-slate-200"
+                              }`}
+                            >
+                              {child.label}
+                            </Link>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      {/* Divider */}
+      <div className="mx-3 border-t border-slate-700" />
+
+      {/* Profile */}
+      <div className="p-3">
+        <Link
+          href="/agent/profile"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors mb-1 ${
+            pathname === "/agent/profile"
+              ? "bg-blue-600 text-white font-medium"
+              : "text-slate-300 hover:bg-slate-800 hover:text-white"
+          }`}
+        >
+          <User size={18} />
+          <span className="flex-1">Profile</span>
+        </Link>
+        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+          <LogOut size={18} />
+          <span className="flex-1 text-left">Logout</span>
+        </button>
+      </div>
+
+      {/* User Card */}
+      <div className="p-3">
+        <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-800/50">
+          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold">
+            {initials}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{userName}</p>
+            <p className="text-[11px] text-slate-400">Agent</p>
+          </div>
+          <ChevronDown size={14} className="text-slate-400" />
+        </div>
+      </div>
+    </aside>
   )
 }
