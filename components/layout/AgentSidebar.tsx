@@ -57,7 +57,7 @@ export function AgentSidebar({ userName, agentId }: AgentSidebarProps) {
       {/* Mobile menu button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-card border border-border shadow-sm hover:bg-secondary transition-colors"
+        className="fixed top-4 left-4 z-[60] lg:hidden p-2 rounded-lg bg-card border border-border shadow-sm hover:bg-secondary transition-colors"
       >
         {isOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
@@ -65,14 +65,14 @@ export function AgentSidebar({ userName, agentId }: AgentSidebarProps) {
       {/* Sidebar overlay for mobile */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 lg:hidden animate-fade-in"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[50] lg:hidden animate-fade-in"
           onClick={() => setIsOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - higher z-index than header */}
       <aside
-        className={`fixed left-0 top-0 bottom-0 w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-300 ease-out z-40 overflow-y-auto ${
+        className={`fixed left-0 top-0 bottom-0 w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-300 ease-out z-[60] overflow-y-auto ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
@@ -81,7 +81,7 @@ export function AgentSidebar({ userName, agentId }: AgentSidebarProps) {
           <p className="text-sm text-sidebar-foreground/60 mt-1">Agent Portal</p>
         </div>
 
-        <nav className="p-4">
+        <nav className="p-4 pb-24">
           {/* WORK section */}
           <div className="space-y-0.5">
             {workLinks.map(({ href, label, icon: Icon }) => {
@@ -220,7 +220,7 @@ export function AgentSidebar({ userName, agentId }: AgentSidebarProps) {
         </nav>
 
         {/* User card at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border/50">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border/50 bg-sidebar">
           <div className="flex items-center gap-3 px-2">
             <div className="w-8 h-8 rounded-full bg-sidebar-primary/20 flex items-center justify-center">
               <span className="text-xs font-bold text-sidebar-primary">

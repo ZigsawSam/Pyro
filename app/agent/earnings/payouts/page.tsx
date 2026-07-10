@@ -24,6 +24,7 @@ export default function PayoutsPage() {
   const [loading, setLoading] = useState(true)
   const [payouts, setPayouts] = useState<PayoutRecord[]>([])
   const [requesting, setRequesting] = useState(false)
+  const [pendingAmount, setPendingAmount] = useState(0)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -41,23 +42,47 @@ export default function PayoutsPage() {
   const fetchData = async (id: number) => {
     setLoading(true)
     try {
-      const { data } = await supabase
-        .from("payouts")
-        .select(`id, amount_paid, status, created_at, shops:shop_id (shop_name)`)
-        .eq("agent_id", id)
-        .order("created_at", { ascending: false })
+      const [{ data: sales }, { data: payoutData }] = await Promise.all([
+        supabase.from("sales").select("id, commission_amount").eq("agent_id", id),
+        supabase.from("payouts").select("id, sale_id, amount_paid, status, created_at, shops:shop_id (shop_name)").eq("agent_id", id).order("created_at", { ascending: false }),
+      ])
 
-      const formatted = (data || []).map((p: any) => ({
+      // Calculate pending amount
+      const totalEarned = (sales || []).reduce((sum: number, s: any) => sum + Number(s.commission_amount || 0), 0)
+      const totalPaid = (payoutData || []).reduce((sum: number, p: any) => sum + Number(p.amount_paid || 0), 0)
+      setPendingAmount(Math.max(0, totalEarned - totalPaid))
+
+      const formatted = (payoutData || []).map((p: any) => ({
         id: p.id,
         amount_paid: Number(p.amount_paid || 0),
         status: p.status || "pending",
         created_at: p.created_at,
-        shop_name: p.shops?.shop_name || "Unknown Shop",
+        shop_name: p.shops?.shop_name || "Payout",
       }))
 
       setPayouts(formatted)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
+  }
+
+  const handleRequestPayout = async () => {
+    if (!agentId || pendingAmount <= 0) return
+    setRequesting(true)
+    try {
+      const { error } = await supabase.from("payouts").insert({
+        agent_id: agentId,
+        amount_paid: pendingAmount,
+        status: "pending",
+      })
+      if (error) throw error
+      fetchData(agentId)
+      alert(`Payout request of ₹${pendingAmount.toLocaleString()} submitted!`)
+    } catch (e) {
+      console.error(e)
+      alert("Failed to request payout. Make sure your payouts table has the right columns.")
+    } finally {
+      setRequesting(false)
+    }
   }
 
   const stats = useMemo(() => {
@@ -67,48 +92,6 @@ export default function PayoutsPage() {
     const paid = payouts.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount_paid, 0)
     return { total, pending, processing, paid }
   }, [payouts])
-
-  const handleRequestPayout = async () => {
-    if (!agentId) return
-    setRequesting(true)
-    try {
-      // Calculate pending commission
-      const { data: sales } = await supabase
-        .from("sales")
-        .select("commission_amount")
-        .eq("agent_id", agentId)
-
-      const { data: existingPayouts } = await supabase
-        .from("payouts")
-        .select("amount_paid")
-        .eq("agent_id", agentId)
-
-      const totalEarned = (sales || []).reduce((sum: number, s: any) => sum + Number(s.commission_amount || 0), 0)
-      const totalPaid = (existingPayouts || []).reduce((sum: number, p: any) => sum + Number(p.amount_paid || 0), 0)
-      const pendingAmount = totalEarned - totalPaid
-
-      if (pendingAmount <= 0) {
-        alert("No pending commission to payout")
-        setRequesting(false)
-        return
-      }
-
-      const { error } = await supabase.from("payouts").insert({
-        agent_id: agentId,
-        amount_paid: pendingAmount,
-        status: "pending",
-      })
-
-      if (error) throw error
-      fetchData(agentId)
-      alert("Payout requested successfully!")
-    } catch (e) {
-      console.error(e)
-      alert("Failed to request payout")
-    } finally {
-      setRequesting(false)
-    }
-  }
 
   const statusConfig: Record<string, { label: string; bg: string; text: string; icon: any }> = {
     pending: { label: "Pending", bg: "bg-amber-50", text: "text-amber-700", icon: Clock },
@@ -128,7 +111,6 @@ export default function PayoutsPage() {
   return (
     <MainLayout title="Payouts" isAgent={true} userName={agentName} agentId={agentId}>
       <div className="space-y-6">
-        {/* Header */}
         <div>
           <Button variant="outline" size="sm" onClick={() => router.push("/agent/earnings")} className="mb-3 border-slate-200 gap-1.5">
             <ArrowLeft size={16} /> Back to Earnings
@@ -138,9 +120,13 @@ export default function PayoutsPage() {
               <h1 className="text-2xl font-bold text-slate-900">Payouts</h1>
               <p className="text-sm text-slate-500 mt-1">Track withdrawal requests and payment history</p>
             </div>
-            <Button onClick={handleRequestPayout} disabled={requesting} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+            <Button 
+              onClick={handleRequestPayout} 
+              disabled={requesting || pendingAmount <= 0} 
+              className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+            >
               <Banknote size={18} />
-              {requesting ? "Processing..." : "Request Payout"}
+              {requesting ? "Processing..." : `Request Payout (₹${pendingAmount.toLocaleString()})`}
             </Button>
           </div>
         </div>
@@ -173,7 +159,7 @@ export default function PayoutsPage() {
               ))}
             </div>
 
-            {/* Payout History Table */}
+            {/* Payout History */}
             <Card className="bg-white border-slate-100 shadow-sm">
               <div className="p-5 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="font-semibold text-slate-900">Payout History</h3>
@@ -186,7 +172,7 @@ export default function PayoutsPage() {
                   <thead>
                     <tr className="border-b border-slate-100 text-left text-slate-500">
                       <th className="py-3 px-5 font-medium">Date</th>
-                      <th className="py-3 px-5 font-medium">Shop</th>
+                      <th className="py-3 px-5 font-medium">Description</th>
                       <th className="py-3 px-5 font-medium text-right">Amount</th>
                       <th className="py-3 px-5 font-medium">Status</th>
                     </tr>

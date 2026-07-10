@@ -31,25 +31,25 @@ export function MainLayout({
     return (
       <div className="flex min-h-screen bg-[#f8fafc]">
         <AgentSidebar userName={userName} agentId={agentId} />
-        <main className="flex-1 flex flex-col overflow-hidden lg:ml-[240px]">
+        <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
           <AgentHeader title={title} subtitle={subtitle} agentName={userName} agentId={agentId} />
-          <div className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-auto">
             <div className="p-6 animate-fade-in">{children}</div>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="flex min-h-screen bg-[#f8fafc]">
-      <ShopSidebar shopName={shopName} shopId={shopId} />
-      <main className="flex-1 flex flex-col overflow-hidden lg:ml-[240px]">
+      <ShopSidebar shopId={shopId} shopName={shopName} userName={userName} />
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
         <ShopHeader title={title} subtitle={subtitle} shopName={shopName} shopId={shopId} />
-        <div className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto">
           <div className="p-6 animate-fade-in">{children}</div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   )
 }
