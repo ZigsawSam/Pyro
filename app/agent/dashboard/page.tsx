@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Loader2, Store, Clock, CheckCircle, XCircle, Search, ArrowRight, Wallet,
   TrendingUp, Receipt, Filter, ShoppingBag, Building2, ArrowUpRight, Minus,
-  BarChart3, Percent, Target
+  BarChart3, Percent, Target, Activity
 } from "lucide-react"
 import { createAgentClient } from "@/lib/supabase/agent-client"
 import { MainLayout } from "@/components/layout/main-layout"
@@ -58,6 +58,20 @@ interface SaleRecord {
   notes: string
 }
 
+interface ActivityItem {
+  id: number
+  type: "onboarded" | "commission" | "payout" | "sale"
+  title: string
+  description: string
+  created_at: string
+  status?: string
+}
+
+interface DailySales {
+  date: string
+  amount: number
+}
+
 export default function AgentDashboardPage() {
   const router = useRouter()
   const supabase = createAgentClient()
@@ -87,6 +101,16 @@ export default function AgentDashboardPage() {
   const [totalCommission, setTotalCommission] = useState(0)
   const [totalPayouts, setTotalPayouts] = useState(0)
   const [shopsCount, setShopsCount] = useState(0)
+
+  // Dynamic data states
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
+  const [dailySales, setDailySales] = useState<DailySales[]>([])
+  const [prevPeriodSales, setPrevPeriodSales] = useState(0)
+  const [prevPeriodCommission, setPrevPeriodCommission] = useState(0)
+  const [newShopsThisMonth, setNewShopsThisMonth] = useState(0)
+  const [prevPeriodPayouts, setPrevPeriodPayouts] = useState(0)
+  const [monthlyTarget, setMonthlyTarget] = useState(200000)
+  const [monthlyAchieved, setMonthlyAchieved] = useState(0)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -189,7 +213,7 @@ export default function AgentDashboardPage() {
     try {
       const { data, error } = await supabase
         .from("sales")
-        .select("shop_id, amount, commission_amount")
+        .select("shop_id, amount, commission_amount, sale_date")
         .eq("agent_id", id)
       if (!error) salesData = data || []
     } catch (e) { console.error(e) }
@@ -199,20 +223,116 @@ export default function AgentDashboardPage() {
     try {
       const { data, error } = await supabase
         .from("payouts")
-        .select("shop_id, amount_paid")
+        .select("shop_id, amount_paid, created_at")
         .eq("agent_id", id)
       if (!error) payouts = data || []
     } catch (e) { console.error(e) }
 
-    // Calculate stats
-    const totalSalesAmt = salesData.reduce((sum, s) => sum + Number(s.amount || 0), 0)
-    const totalCommAmt = salesData.reduce((sum, s) => sum + Number(s.commission_amount || 0), 0)
-    const totalPayoutAmt = payouts.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
+    // Calculate current period stats
+    const now = new Date()
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
+
+    const currentMonthSales = salesData.filter(s => new Date(s.sale_date) >= currentMonthStart)
+    const prevMonthSales = salesData.filter(s => {
+      const d = new Date(s.sale_date)
+      return d >= prevMonthStart && d <= prevMonthEnd
+    })
+
+    const totalSalesAmt = currentMonthSales.reduce((sum, s) => sum + Number(s.amount || 0), 0)
+    const totalCommAmt = currentMonthSales.reduce((sum, s) => sum + Number(s.commission_amount || 0), 0)
+    const totalPayoutAmt = payouts
+      .filter((p: any) => new Date(p.created_at) >= currentMonthStart)
+      .reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
+    const prevPayoutAmt = payouts
+      .filter((p: any) => {
+        const d = new Date(p.created_at)
+        return d >= prevMonthStart && d <= prevMonthEnd
+      })
+      .reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
+
+    const prevSalesAmt = prevMonthSales.reduce((sum, s) => sum + Number(s.amount || 0), 0)
+    const prevCommAmt = prevMonthSales.reduce((sum, s) => sum + Number(s.commission_amount || 0), 0)
+
+    // New shops this month
+    const newShopsCount = linkedShopsData.filter((l: any) => {
+      const created = l.created_at ? new Date(l.created_at) : null
+      return created && created >= currentMonthStart
+    }).length
+
+    // Daily sales for chart (last 10 days)
+    const last10Days: DailySales[] = []
+    for (let i = 9; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const dateStr = d.toISOString().split("T")[0]
+      const daySales = salesData
+        .filter((s: any) => s.sale_date?.startsWith(dateStr))
+        .reduce((sum, s) => sum + Number(s.amount || 0), 0)
+      last10Days.push({ date: dateStr, amount: daySales })
+    }
+
+    // Monthly target & achieved
+    const monthAchieved = totalSalesAmt
+    const target = 200000 // Can be fetched from agent settings if available
+
+    // Recent activity from actual data
+    const activityItems: ActivityItem[] = []
+
+    // Recent shop links
+    linkedShopsData.slice(-3).forEach((link: any, idx: number) => {
+      activityItems.push({
+        id: idx,
+        type: "onboarded",
+        title: "Shop Onboarded",
+        description: `New shop "${link.shops?.shop_name || "Unknown"}" has been onboarded`,
+        created_at: link.created_at || new Date().toISOString(),
+        status: "Completed"
+      })
+    })
+
+    // Recent sales
+    currentMonthSales.slice(-3).forEach((sale: any, idx: number) => {
+      const shopName = linkedShopsData.find((l: any) => l.shop_id === sale.shop_id)?.shops?.shop_name || "Unknown Shop"
+      activityItems.push({
+        id: 100 + idx,
+        type: "commission",
+        title: "Commission Confirmed",
+        description: `₹${Number(sale.commission_amount || 0).toLocaleString()} commission from ${shopName}`,
+        created_at: sale.sale_date,
+        status: "Confirmed"
+      })
+    })
+
+    // Recent payouts
+    payouts.slice(-3).forEach((payout: any, idx: number) => {
+      activityItems.push({
+        id: 200 + idx,
+        type: "payout",
+        title: "Payout Initiated",
+        description: `Payout of ₹${Number(payout.amount_paid || 0).toLocaleString()} has been initiated`,
+        created_at: payout.created_at,
+        status: "Processing"
+      })
+    })
+
+    // Sort by date descending and take top 5
+    activityItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    const topActivity = activityItems.slice(0, 5)
 
     setTotalSales(totalSalesAmt)
     setTotalCommission(totalCommAmt)
     setTotalPayouts(totalPayoutAmt)
     setShopsCount(linkedShopsData.length)
+    setPrevPeriodSales(prevSalesAmt)
+    setPrevPeriodCommission(prevCommAmt)
+    setNewShopsThisMonth(newShopsCount)
+    setPrevPeriodPayouts(prevPayoutAmt)
+    setDailySales(last10Days)
+    setMonthlyAchieved(monthAchieved)
+    setMonthlyTarget(target)
+    setRecentActivity(topActivity)
 
     const shopStats = salesData.reduce((acc: any, sale: any) => {
       if (!acc[sale.shop_id]) acc[sale.shop_id] = { total_sales: 0, total_commission: 0 }
@@ -285,6 +405,31 @@ export default function AgentDashboardPage() {
   useEffect(() => {
     if (showSalesSection && agentId) fetchSales()
   }, [showSalesSection, salesFilterShop, salesDateFrom, salesDateTo, agentId])
+
+  // Computed stats
+  const salesGrowth = useMemo(() => {
+    if (prevPeriodSales === 0) return totalSales > 0 ? 100 : 0
+    return Number((((totalSales - prevPeriodSales) / prevPeriodSales) * 100).toFixed(1))
+  }, [totalSales, prevPeriodSales])
+
+  const commissionGrowth = useMemo(() => {
+    if (prevPeriodCommission === 0) return totalCommission > 0 ? 100 : 0
+    return Number((((totalCommission - prevPeriodCommission) / prevPeriodCommission) * 100).toFixed(1))
+  }, [totalCommission, prevPeriodCommission])
+
+  const payoutGrowth = useMemo(() => {
+    if (prevPeriodPayouts === 0) return totalPayouts > 0 ? 100 : 0
+    return Number((((totalPayouts - prevPeriodPayouts) / prevPeriodPayouts) * 100).toFixed(1))
+  }, [totalPayouts, prevPeriodPayouts])
+
+  const monthlyProgress = useMemo(() => {
+    if (monthlyTarget === 0) return 0
+    return Math.min(100, Math.round((monthlyAchieved / monthlyTarget) * 100))
+  }, [monthlyAchieved, monthlyTarget])
+
+  const maxDailySale = useMemo(() => {
+    return Math.max(...dailySales.map(d => d.amount), 1)
+  }, [dailySales])
 
   const handleSearch = async () => {
     if (!searchQuery.trim() || !agentId) return
@@ -413,6 +558,31 @@ export default function AgentDashboardPage() {
     }
   }
 
+  const formatRelativeTime = (dateStr: string) => {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return "Just now"
+    if (diffMins < 60) return `${diffMins} min ago`
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`
+    return date.toLocaleDateString()
+  }
+
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case "onboarded": return { icon: Store, color: "text-green-500", bg: "bg-green-50", badgeColor: "bg-green-100 text-green-700" }
+      case "commission": return { icon: TrendingUp, color: "text-blue-500", bg: "bg-blue-50", badgeColor: "bg-blue-100 text-blue-700" }
+      case "payout": return { icon: Wallet, color: "text-amber-500", bg: "bg-amber-50", badgeColor: "bg-amber-100 text-amber-700" }
+      case "sale": return { icon: ShoppingBag, color: "text-purple-500", bg: "bg-purple-50", badgeColor: "bg-purple-100 text-purple-700" }
+      default: return { icon: Activity, color: "text-slate-500", bg: "bg-slate-50", badgeColor: "bg-slate-100 text-slate-700" }
+    }
+  }
+
   if (!agentId) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -432,9 +602,15 @@ export default function AgentDashboardPage() {
                 <p className="text-sm text-slate-500 font-medium">Total Sales</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">₹{totalSales.toLocaleString()}</p>
                 <div className="flex items-center gap-1 mt-2 text-sm">
-                  <ArrowUpRight size={14} className="text-emerald-500" />
-                  <span className="text-emerald-500 font-medium">18.6%</span>
-                  <span className="text-slate-400">vs last period</span>
+                  {salesGrowth >= 0 ? (
+                    <ArrowUpRight size={14} className="text-emerald-500" />
+                  ) : (
+                    <ArrowUpRight size={14} className="text-red-500 rotate-90" />
+                  )}
+                  <span className={`font-medium ${salesGrowth >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                    {Math.abs(salesGrowth)}%
+                  </span>
+                  <span className="text-slate-400">vs last month</span>
                 </div>
               </div>
               <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
@@ -449,9 +625,15 @@ export default function AgentDashboardPage() {
                 <p className="text-sm text-slate-500 font-medium">Total Commission</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">₹{totalCommission.toLocaleString()}</p>
                 <div className="flex items-center gap-1 mt-2 text-sm">
-                  <ArrowUpRight size={14} className="text-emerald-500" />
-                  <span className="text-emerald-500 font-medium">14.3%</span>
-                  <span className="text-slate-400">vs last period</span>
+                  {commissionGrowth >= 0 ? (
+                    <ArrowUpRight size={14} className="text-emerald-500" />
+                  ) : (
+                    <ArrowUpRight size={14} className="text-red-500 rotate-90" />
+                  )}
+                  <span className={`font-medium ${commissionGrowth >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                    {Math.abs(commissionGrowth)}%
+                  </span>
+                  <span className="text-slate-400">vs last month</span>
                 </div>
               </div>
               <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center">
@@ -466,9 +648,18 @@ export default function AgentDashboardPage() {
                 <p className="text-sm text-slate-500 font-medium">Shops Onboarded</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">{shopsCount}</p>
                 <div className="flex items-center gap-1 mt-2 text-sm">
-                  <ArrowUpRight size={14} className="text-emerald-500" />
-                  <span className="text-emerald-500 font-medium">2</span>
-                  <span className="text-slate-400">new this month</span>
+                  {newShopsThisMonth > 0 ? (
+                    <>
+                      <ArrowUpRight size={14} className="text-emerald-500" />
+                      <span className="text-emerald-500 font-medium">{newShopsThisMonth}</span>
+                      <span className="text-slate-400">new this month</span>
+                    </>
+                  ) : (
+                    <>
+                      <Minus size={14} className="text-slate-400" />
+                      <span className="text-slate-400">No new shops this month</span>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
@@ -483,8 +674,20 @@ export default function AgentDashboardPage() {
                 <p className="text-sm text-slate-500 font-medium">Payouts Received</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">₹{totalPayouts.toLocaleString()}</p>
                 <div className="flex items-center gap-1 mt-2 text-sm">
-                  <Minus size={14} className="text-slate-400" />
-                  <span className="text-slate-400">Same as last period</span>
+                  {payoutGrowth === 0 ? (
+                    <>
+                      <Minus size={14} className="text-slate-400" />
+                      <span className="text-slate-400">Same as last month</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUpRight size={14} className={payoutGrowth >= 0 ? "text-emerald-500" : "text-red-500 rotate-90"} />
+                      <span className={`font-medium ${payoutGrowth >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                        {Math.abs(payoutGrowth)}%
+                      </span>
+                      <span className="text-slate-400">vs last month</span>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center">
@@ -496,41 +699,58 @@ export default function AgentDashboardPage() {
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Sales Overview */}
+          {/* Sales Overview — Dynamic */}
           <Card className="p-5 bg-white border-slate-200 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <BarChart3 size={16} className="text-blue-500" />
               <h3 className="font-semibold text-slate-900">Sales Overview</h3>
             </div>
-            <div className="h-40 flex items-end justify-between gap-2 px-2">
-              {[12, 18, 14, 22, 16, 25, 20, 28, 24, 30].map((h, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full max-w-[28px] rounded-t-sm" style={{ height: `${h * 3}px`, background: i === 9 ? '#3b82f6' : '#dbeafe' }} />
-                  <span className="text-[9px] text-slate-400">{['Jul 1','2','3','4','5','6','7','8','9','10'][i]}</span>
-                </div>
-              ))}
-            </div>
+            {dailySales.length > 0 && dailySales.some(d => d.amount > 0) ? (
+              <div className="h-40 flex items-end justify-between gap-2 px-2">
+                {dailySales.map((day, i) => {
+                  const height = maxDailySale > 0 ? (day.amount / maxDailySale) * 100 : 0
+                  const isToday = i === dailySales.length - 1
+                  const dateLabel = new Date(day.date).getDate()
+                  return (
+                    <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                      <div
+                        className="w-full max-w-[28px] rounded-t-sm transition-all"
+                        style={{
+                          height: `${Math.max(height, 4)}px`,
+                          background: isToday ? '#3b82f6' : '#dbeafe'
+                        }}
+                      />
+                      <span className="text-[9px] text-slate-400">{dateLabel}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="h-40 flex items-center justify-center text-slate-400 text-sm">
+                No sales data yet
+              </div>
+            )}
           </Card>
 
-          {/* Commission Trend */}
+          {/* Commission Trend — Dynamic */}
           <Card className="p-5 bg-white border-slate-200 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <TrendingUp size={16} className="text-blue-500" />
                 <h3 className="font-semibold text-slate-900">Commission Trend</h3>
               </div>
-              <select className="text-xs border border-slate-200 rounded-lg px-2 py-1 text-slate-600 bg-white">
-                <option>This 10 Days</option>
-              </select>
+              <span className="text-xs text-slate-400">This Month</span>
             </div>
             <div className="flex items-center justify-center">
               <div className="relative w-28 h-28">
                 <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                  <circle cx="50" cy="50" r="38" fill="none" stroke="#dbeafe" strokeWidth="10" />
-                  <circle cx="50" cy="50" r="38" fill="none" stroke="#3b82f6" strokeWidth="10" strokeDasharray="163 251" strokeLinecap="round" />
-                  <circle cx="50" cy="50" r="38" fill="none" stroke="#10b981" strokeWidth="10" strokeDasharray="50 251" strokeDashoffset="-163" strokeLinecap="round" />
-                  <circle cx="50" cy="50" r="38" fill="none" stroke="#f59e0b" strokeWidth="10" strokeDasharray="25 251" strokeDashoffset="-213" strokeLinecap="round" />
-                  <circle cx="50" cy="50" r="38" fill="none" stroke="#ef4444" strokeWidth="10" strokeDasharray="13 251" strokeDashoffset="-238" strokeLinecap="round" />
+                  <circle cx="50" cy="50" r="38" fill="none" stroke="#e2e8f0" strokeWidth="10" />
+                  {totalCommission > 0 ? (
+                    <>
+                      <circle cx="50" cy="50" r="38" fill="none" stroke="#3b82f6" strokeWidth="10"
+                        strokeDasharray={`${Math.min(totalCommission / 5000, 1) * 239} 239`} strokeLinecap="round" />
+                    </>
+                  ) : null}
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-lg font-bold text-slate-900">₹{totalCommission.toLocaleString()}</span>
@@ -539,40 +759,49 @@ export default function AgentDashboardPage() {
               </div>
             </div>
             <div className="mt-3 space-y-1.5">
-              {[
-                { label: 'Confirmed', color: 'bg-blue-500', value: '₹4,042 (64.8%)' },
-                { label: 'Pending', color: 'bg-emerald-500', value: '₹1,650 (26.4%)' },
-                { label: 'Processing', color: 'bg-amber-500', value: '₹350 (5.6%)' },
-                { label: 'Rejected', color: 'bg-red-500', value: '₹200 (3.2%)' },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <div className={`w-2 h-2 rounded-full ${item.color}`} />
-                    <span className="text-slate-600">{item.label}</span>
+              {linkedShops.length > 0 ? linkedShops.slice(0, 4).map((shop) => {
+                const pct = totalCommission > 0 ? ((shop.total_commission / totalCommission) * 100).toFixed(1) : "0"
+                const colors = ["bg-blue-500", "bg-emerald-500", "bg-amber-500", "bg-red-500"]
+                const idx = linkedShops.indexOf(shop) % 4
+                return (
+                  <div key={shop.shop_id} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <div className={`w-2 h-2 rounded-full ${colors[idx]}`} />
+                      <span className="text-slate-600 truncate max-w-[120px]">{shop.shop_name}</span>
+                    </div>
+                    <span className="font-medium text-slate-900">₹{shop.total_commission.toLocaleString()} ({pct}%)</span>
                   </div>
-                  <span className="font-medium text-slate-900">{item.value}</span>
-                </div>
-              ))}
+                )
+              }) : (
+                <p className="text-xs text-slate-400 text-center">No commission data yet</p>
+              )}
             </div>
           </Card>
 
-          {/* Performance */}
+          {/* Performance — Dynamic */}
           <Card className="p-5 bg-white border-slate-200 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Target size={16} className="text-blue-500" />
                 <h3 className="font-semibold text-slate-900">Performance This Month</h3>
               </div>
-              <span className="text-[10px] px-2 py-1 bg-green-100 text-green-700 rounded-full font-medium">Great going! 🎉</span>
+              {monthlyProgress >= 80 ? (
+                <span className="text-[10px] px-2 py-1 bg-green-100 text-green-700 rounded-full font-medium">Great going! 🎉</span>
+              ) : monthlyProgress >= 50 ? (
+                <span className="text-[10px] px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-medium">Keep pushing! 💪</span>
+              ) : (
+                <span className="text-[10px] px-2 py-1 bg-amber-100 text-amber-700 rounded-full font-medium">Get started! 🚀</span>
+              )}
             </div>
             <div className="flex items-center justify-center py-1">
               <div className="relative w-24 h-24">
                 <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                   <circle cx="50" cy="50" r="40" fill="none" stroke="#e2e8f0" strokeWidth="8" />
-                  <circle cx="50" cy="50" r="40" fill="none" stroke="#3b82f6" strokeWidth="8" strokeDasharray="190 251" strokeLinecap="round" />
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="#3b82f6" strokeWidth="8"
+                    strokeDasharray={`${(monthlyProgress / 100) * 251} 251`} strokeLinecap="round" />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-xl font-bold text-slate-900">72%</span>
+                  <span className="text-xl font-bold text-slate-900">{monthlyProgress}%</span>
                   <span className="text-[9px] text-slate-400">of monthly target</span>
                 </div>
               </div>
@@ -580,94 +809,95 @@ export default function AgentDashboardPage() {
             <div className="mt-3 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Target</span>
-                <span className="font-semibold text-slate-900">₹2,00,000</span>
+                <span className="font-semibold text-slate-900">₹{monthlyTarget.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Achieved</span>
-                <span className="font-semibold text-slate-900">₹1,45,620</span>
+                <span className="font-semibold text-slate-900">₹{monthlyAchieved.toLocaleString()}</span>
               </div>
               <div className="w-full bg-slate-100 rounded-full h-1.5">
-                <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: '72%' }} />
+                <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${monthlyProgress}%` }} />
               </div>
-              <p className="text-[11px] text-slate-500">₹54,380 left to reach your target</p>
+              <p className="text-[11px] text-slate-500">
+                {monthlyAchieved >= monthlyTarget
+                  ? "🎉 Target achieved!"
+                  : `₹${(monthlyTarget - monthlyAchieved).toLocaleString()} left to reach your target`}
+              </p>
             </div>
           </Card>
         </div>
 
         {/* Bottom Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Recent Activity */}
+          {/* Recent Activity — Dynamic */}
           <Card className="p-5 bg-white border-slate-200 shadow-sm">
             <h3 className="font-semibold text-slate-900 mb-4">Recent Activity</h3>
-            <div className="space-y-4">
-              {[
-                { icon: Store, iconColor: 'text-green-500', bg: 'bg-green-50', title: 'Shop Onboarded', desc: 'New shop "Sunrise Retail" has been onboarded', time: 'Today, 11:30 AM', badge: 'Completed', badgeColor: 'bg-green-100 text-green-700' },
-                { icon: TrendingUp, iconColor: 'text-blue-500', bg: 'bg-blue-50', title: 'Commission Confirmed', desc: '₹1,250 commission confirmed from M S Traders', time: 'Today, 10:15 AM', badge: 'Confirmed', badgeColor: 'bg-blue-100 text-blue-700' },
-                { icon: Wallet, iconColor: 'text-amber-500', bg: 'bg-amber-50', title: 'Payout Initiated', desc: 'Payout of ₹2,500 has been initiated', time: 'Yesterday, 06:45 PM', badge: 'Processing', badgeColor: 'bg-amber-100 text-amber-700' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-lg ${item.bg} flex items-center justify-center shrink-0`}>
-                    <item.icon size={14} className={item.iconColor} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900">{item.title}</p>
-                    <p className="text-xs text-slate-500">{item.desc}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-xs text-slate-400">{item.time}</p>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${item.badgeColor}`}>{item.badge}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button className="mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
-              View All Activity <ArrowRight size={14} />
-            </button>
+            {recentActivity.length > 0 ? (
+              <div className="space-y-4">
+                {recentActivity.map((item) => {
+                  const { icon: Icon, color, bg, badgeColor } = getActivityIcon(item.type)
+                  return (
+                    <div key={item.id} className="flex items-start gap-3">
+                      <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
+                        <Icon size={14} className={color} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900">{item.title}</p>
+                        <p className="text-xs text-slate-500">{item.description}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs text-slate-400">{formatRelativeTime(item.created_at)}</p>
+                        {item.status && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full ${badgeColor}`}>{item.status}</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="text-center text-slate-400 py-8 text-sm">
+                <Activity size={24} className="mx-auto mb-2 opacity-50" />
+                No recent activity yet
+              </div>
+            )}
           </Card>
 
-          {/* Top Performing Shops */}
+          {/* Top Performing Shops — Dynamic */}
           <Card className="p-5 bg-white border-slate-200 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-slate-900">Top Performing Shops</h3>
               <button className="text-xs text-blue-600 hover:text-blue-700 font-medium">View All</button>
             </div>
-            <div className="space-y-4">
-              {linkedShops.length > 0 ? linkedShops.slice(0, 3).map((shop, i) => (
-                <div key={shop.shop_id} className="flex items-center gap-3">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                    i === 0 ? 'bg-amber-100 text-amber-600' : i === 1 ? 'bg-slate-100 text-slate-600' : 'bg-orange-100 text-orange-600'
-                  }`}>{i + 1}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900">{shop.shop_name}</p>
-                    <p className="text-xs text-slate-500">{shop.commission_rate}% commission rate</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-slate-900">₹{shop.total_sales.toLocaleString()}</p>
-                    <p className="text-xs text-emerald-500 flex items-center justify-end gap-0.5">
-                      <ArrowUpRight size={10} /> {i === 0 ? '22.5%' : i === 1 ? '15.8%' : '10.3%'}
-                    </p>
-                  </div>
-                </div>
-              )) : (
-                <>
-                  <div className="flex items-center gap-3 opacity-40">
-                    <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-600">1</div>
-                    <div className="flex-1"><p className="text-sm font-medium text-slate-900">M S Traders</p><p className="text-xs text-slate-500">Raxaul, Bihar</p></div>
-                    <div className="text-right"><p className="text-sm font-bold text-slate-900">₹48,250</p><p className="text-xs text-emerald-500">↑ 22.5%</p></div>
-                  </div>
-                  <div className="flex items-center gap-3 opacity-40">
-                    <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">2</div>
-                    <div className="flex-1"><p className="text-sm font-medium text-slate-900">Shree Balaji Store</p><p className="text-xs text-slate-500">Motihari, Bihar</p></div>
-                    <div className="text-right"><p className="text-sm font-bold text-slate-900">₹32,100</p><p className="text-xs text-emerald-500">↑ 15.8%</p></div>
-                  </div>
-                  <div className="flex items-center gap-3 opacity-40">
-                    <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-xs font-bold text-orange-600">3</div>
-                    <div className="flex-1"><p className="text-sm font-medium text-slate-900">Kanha General Store</p><p className="text-xs text-slate-500">Sitamarhi, Bihar</p></div>
-                    <div className="text-right"><p className="text-sm font-bold text-slate-900">₹21,430</p><p className="text-xs text-emerald-500">↑ 10.3%</p></div>
-                  </div>
-                </>
-              )}
-            </div>
+            {linkedShops.length > 0 ? (
+              <div className="space-y-4">
+                {linkedShops
+                  .sort((a, b) => b.total_sales - a.total_sales)
+                  .slice(0, 3)
+                  .map((shop, i) => (
+                    <div key={shop.shop_id} className="flex items-center gap-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                        i === 0 ? 'bg-amber-100 text-amber-600' : i === 1 ? 'bg-slate-100 text-slate-600' : 'bg-orange-100 text-orange-600'
+                      }`}>{i + 1}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900">{shop.shop_name}</p>
+                        <p className="text-xs text-slate-500">{shop.commission_rate}% commission rate</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-slate-900">₹{shop.total_sales.toLocaleString()}</p>
+                        <p className="text-xs text-emerald-500 flex items-center justify-end gap-0.5">
+                          <ArrowUpRight size={10} /> {shop.total_commission > 0 ? `₹${shop.total_commission.toLocaleString()}` : "No sales"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="text-center text-slate-400 py-8 text-sm">
+                <Store size={24} className="mx-auto mb-2 opacity-50" />
+                No shops linked yet. Onboard shops to see performance.
+              </div>
+            )}
           </Card>
 
           {/* Quick Actions */}
@@ -698,8 +928,18 @@ export default function AgentDashboardPage() {
                 <TrendingUp size={20} className="text-blue-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-900">Keep growing! You&apos;re doing great this month.</p>
-                <p className="text-xs text-slate-500">Onboard more shops and increase your sales to earn higher commissions.</p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {monthlyProgress >= 80
+                    ? "Keep growing! You're doing great this month."
+                    : monthlyProgress >= 50
+                    ? "You're halfway there! Keep pushing."
+                    : "Start onboarding shops to reach your target!"}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {linkedShops.length > 0
+                    ? `You have ${linkedShops.length} shop${linkedShops.length > 1 ? "s" : ""} linked. Onboard more to increase earnings.`
+                    : "Onboard shops and increase your sales to earn higher commissions."}
+                </p>
               </div>
             </div>
             <Button className="bg-blue-600 hover:bg-blue-700 text-white shrink-0">
