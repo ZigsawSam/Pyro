@@ -4,7 +4,6 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Base colors using OKLCH */
   --background: oklch(0.98 0.001 231.6);
   --foreground: oklch(0.14 0.04 256.6);
   --card: oklch(1 0 0);
@@ -30,8 +29,6 @@
   --chart-4: oklch(0.7 0.12 322.2);
   --chart-5: oklch(0.45 0.13 284.8);
   --radius: 0.5rem;
-
-  /* Sidebar colors — OKLCH format matching your theme */
   --sidebar: oklch(0.14 0.04 256.6);
   --sidebar-foreground: oklch(1 0 0);
   --sidebar-primary: oklch(0.54 0.16 252.8);
@@ -67,8 +64,6 @@
   --chart-3: oklch(0.75 0.18 53.6);
   --chart-4: oklch(0.8 0.15 322.2);
   --chart-5: oklch(0.6 0.16 284.8);
-
-  /* Dark mode sidebar */
   --sidebar: oklch(0.14 0.04 256.6);
   --sidebar-foreground: oklch(0.95 0.01 0);
   --sidebar-primary: oklch(0.65 0.2 252.8);
@@ -105,8 +100,6 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
   --radius: 0.5rem;
-  
-  /* Sidebar theme mappings */
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -124,4 +117,141 @@
   body {
     @apply bg-background text-foreground;
   }
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* ===== PROFESSIONAL ANIMATIONS ===== */
+
+/* Page fade-in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Dropdown scale-in */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Bell shake for new notifications */
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0); }
+  10% { transform: rotate(8deg); }
+  20% { transform: rotate(-8deg); }
+  30% { transform: rotate(4deg); }
+  40% { transform: rotate(-4deg); }
+  50% { transform: rotate(2deg); }
+  60% { transform: rotate(-2deg); }
+  70% { transform: rotate(1deg); }
+  80% { transform: rotate(-1deg); }
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Pulse for notification dot */
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.7; }
+  100% { transform: scale(0.8); opacity: 1; }
+}
+
+/* Slide in from right */
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Card hover lift */
+@keyframes lift {
+  from { transform: translateY(0); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  to { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.12); }
+}
+
+/* Utility classes */
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out forwards;
+  transform-origin: top right;
+}
+
+.animate-bell-shake {
+  animation: bellShake 0.8s ease-in-out;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, var(--muted) 25%, var(--background) 50%, var(--muted) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out forwards;
+}
+
+/* Card hover effect */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+}
+
+/* Button press effect */
+.btn-press {
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* Smooth dropdown */
+.dropdown-enter {
+  opacity: 0;
+  transform: scale(0.95) translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.dropdown-enter-active {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 3px;
+  opacity: 0.3;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground);
+  opacity: 0.5;
+}
+
+/* Focus ring animation */
+.focus-ring-animate {
+  transition: box-shadow 0.2s ease, ring-color 0.2s ease;
+}
+.focus-ring-animate:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring), 0 0 0 4px var(--background);
 }
