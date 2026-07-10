@@ -18,6 +18,7 @@ interface PayStaffDialogProps {
     name: string
     pending_salary?: number
     pending_payroll?: number
+    advance_taken?: number
     account_name?: string
     account_number?: string
     bank_name?: string
@@ -63,7 +64,7 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
       try {
         const now = new Date()
         const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
-        
+
         const { data, error } = await supabase
           .from("attendance")
           .select("id, attendance_date, status, work_hours, overtime_hours")
@@ -136,10 +137,10 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
           `Bank: ${staff.bank_name || "-"}`,
           `IFSC: ${staff.ifsc_code || "-"}`,
           `Amount: ${amountLabel}`,
-        ].join("\\n")
+        ].join("\n")
         paymentType = "bank"
       } else {
-        paymentPayload = [`Staff payout`, `Name: ${staff.name}`, `Amount: ${amountLabel}`].join("\\n")
+        paymentPayload = [`Staff payout`, `Name: ${staff.name}`, `Amount: ${amountLabel}`].join("\n")
       }
 
       const generatedQr = await QRCode.toDataURL(paymentPayload)
@@ -167,13 +168,54 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
     handleCreatePayout(amount)
   }
 
+  // ============================================================
+  // FIXED PAYMENT LOGIC — same as agent payment
+  // ============================================================
+  // If pending > 0 and payment > pending: Deduct full pending, remaining goes to advance
+  // If pending > 0 and payment <= pending: Deduct payment from pending, no advance
+  // If pending = 0: Entire payment goes to advance
+  // ============================================================
   const handleConfirmPayment = async () => {
     if (!staff || !paymentAmount) return
 
     setIsLoading(true)
     setErrorMsg(null)
     try {
-      const { error } = await supabase.from("payouts").insert({
+      const pending = Number(staff?.pending_salary || staff?.pending_payroll || 0)
+      const payment = Number(paymentAmount || 0)
+      const currentAdvance = Number(staff?.advance_taken || 0)
+
+      let newPending = pending
+      let newAdvance = currentAdvance
+
+      if (pending > 0) {
+        if (payment > pending) {
+          // Payment exceeds pending: clear pending, rest goes to advance
+          newPending = 0
+          newAdvance = currentAdvance + (payment - pending)
+        } else {
+          // Payment covers part or all of pending
+          newPending = pending - payment
+          // advance stays same
+        }
+      } else {
+        // No pending salary, entire payment is advance
+        newAdvance = currentAdvance + payment
+      }
+
+      // Update staff record: pending_salary and advance_taken
+      const { error: staffError } = await supabase
+        .from("staff")
+        .update({
+          pending_salary: newPending,
+          advance_taken: newAdvance,
+        })
+        .eq("id", staff.id)
+
+      if (staffError) throw staffError
+
+      // Record the payout
+      const { error: payoutError } = await supabase.from("payouts").insert({
         shop_id: shopId,
         person_type: "staff",
         staff_id: staff.id,
@@ -182,7 +224,7 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
         remarks: paymentMode === "full" ? "Full payout via QR" : `Custom payout via QR (${paymentAmount})`,
       })
 
-      if (error) throw error
+      if (payoutError) throw payoutError
 
       setPaymentCompleted(true)
       onPaid()
@@ -190,7 +232,7 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
       onOpenChange(false)
     } catch (error: any) {
       console.error(error)
-      setErrorMsg(error.message || "Failed to create payout")
+      setErrorMsg(error.message || "Failed to process payment")
     } finally {
       setIsLoading(false)
     }
