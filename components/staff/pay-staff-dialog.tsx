@@ -18,7 +18,6 @@ interface PayStaffDialogProps {
     name: string
     pending_salary?: number
     pending_payroll?: number
-    advance_taken?: number
     account_name?: string
     account_number?: string
     bank_name?: string
@@ -51,7 +50,6 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
   const [paymentCompleted, setPaymentCompleted] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // Accept both pending_salary and pending_payroll for backward compatibility
   const pendingAmount = useMemo(() => {
     return Number(staff?.pending_salary || staff?.pending_payroll || 0)
   }, [staff])
@@ -168,53 +166,12 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
     handleCreatePayout(amount)
   }
 
-  // ============================================================
-  // FIXED PAYMENT LOGIC — same as agent payment
-  // ============================================================
-  // If pending > 0 and payment > pending: Deduct full pending, remaining goes to advance
-  // If pending > 0 and payment <= pending: Deduct payment from pending, no advance
-  // If pending = 0: Entire payment goes to advance
-  // ============================================================
   const handleConfirmPayment = async () => {
     if (!staff || !paymentAmount) return
 
     setIsLoading(true)
     setErrorMsg(null)
     try {
-      const pending = Number(staff?.pending_salary || staff?.pending_payroll || 0)
-      const payment = Number(paymentAmount || 0)
-      const currentAdvance = Number(staff?.advance_taken || 0)
-
-      let newPending = pending
-      let newAdvance = currentAdvance
-
-      if (pending > 0) {
-        if (payment > pending) {
-          // Payment exceeds pending: clear pending, rest goes to advance
-          newPending = 0
-          newAdvance = currentAdvance + (payment - pending)
-        } else {
-          // Payment covers part or all of pending
-          newPending = pending - payment
-          // advance stays same
-        }
-      } else {
-        // No pending salary, entire payment is advance
-        newAdvance = currentAdvance + payment
-      }
-
-      // Update staff record: pending_salary and advance_taken
-      const { error: staffError } = await supabase
-        .from("staff")
-        .update({
-          pending_salary: newPending,
-          advance_taken: newAdvance,
-        })
-        .eq("id", staff.id)
-
-      if (staffError) throw staffError
-
-      // Record the payout
       const { error: payoutError } = await supabase.from("payouts").insert({
         shop_id: shopId,
         person_type: "staff",
@@ -238,7 +195,6 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
     }
   }
 
-  // Calculate attendance summary
   const presentDays = attendance.filter(a => a.status === "present").length
   const halfDays = attendance.filter(a => a.status === "half").length
   const absentDays = attendance.filter(a => a.status === "absent").length
