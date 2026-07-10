@@ -7,7 +7,7 @@ import { createShopClient } from "@/lib/supabase/shop-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
-import { Loader2, Mail, Lock, Eye, EyeOff, Store, User, BarChart3, Users, DollarSign, Sparkles, CheckCircle2 } from "lucide-react"
+import { Loader2, Mail, Lock, Eye, EyeOff, Store, User, BarChart3, Users, DollarSign, Sparkles, CheckCircle2, Phone } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -71,23 +71,52 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
     try {
+      // Agents login with phone number as email: phone@pyro.local + password
+      // Or if no password set, use phone number as both email and password
+      const agentEmail = `${phone}@pyro.local`
+      const agentPassword = password || phone
+
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: agentEmail,
+        password: agentPassword,
+      })
+
+      if (authError || !authData.user) {
+        // If login fails, try to find agent by phone and check if registered
+        const { data: agent, error: agentError } = await supabase
+          .from("agents")
+          .select("id, name, phone_number, user_id")
+          .eq("phone_number", phone)
+          .single()
+
+        if (agentError || !agent) {
+          setError("Agent not found. Please register.")
+          setLoading(false)
+          return
+        }
+
+        // Agent exists but password wrong
+        setError("Invalid password. Please try again.")
+        setLoading(false)
+        return
+      }
+
+      // Verify agent exists in agents table
       const { data: agent, error: agentError } = await supabase
         .from("agents")
-        .select("id, phone, password")
-        .eq("phone", phone)
+        .select("id, name, phone_number")
+        .eq("user_id", authData.user.id)
         .single()
+
       if (agentError || !agent) {
-        setError("Agent not found. Please register.")
+        setError("Agent profile not found. Please contact your shop owner.")
         setLoading(false)
         return
       }
-      if (password && agent.password && password !== agent.password) {
-        setError("Invalid password.")
-        setLoading(false)
-        return
-      }
+
       window.location.href = "/agent/dashboard"
     } catch (err: any) {
+      console.error("Agent login error:", err)
       setError(err.message || "Login failed")
       setLoading(false)
     }
@@ -99,35 +128,20 @@ export default function LoginPage() {
   }
 
   const features = [
-    {
-      icon: BarChart3,
-      title: "Real-time Analytics",
-      description: "Track performance and sales in real-time.",
-    },
-    {
-      icon: Users,
-      title: "Agent Management",
-      description: "Manage agents across multiple shops seamlessly.",
-    },
-    {
-      icon: DollarSign,
-      title: "Payroll Automation",
-      description: "Generate payroll and process payments with ease.",
-    },
+    { icon: BarChart3, title: "Real-time Analytics", description: "Track performance and sales in real-time." },
+    { icon: Users, title: "Agent Management", description: "Manage agents across multiple shops seamlessly." },
+    { icon: DollarSign, title: "Payroll Automation", description: "Generate payroll and process payments with ease." },
   ]
 
   return (
     <div className="min-h-screen flex">
       {/* Left Side - Dark Gradient */}
       <div className="hidden lg:flex lg:w-1/2 xl:w-[45%] bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 relative overflow-hidden">
-        {/* Background pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 left-20 w-72 h-72 bg-indigo-500 rounded-full blur-3xl" />
           <div className="absolute bottom-20 right-20 w-96 h-96 bg-purple-500 rounded-full blur-3xl" />
         </div>
-
         <div className="relative z-10 flex flex-col justify-between p-12 xl:p-16">
-          {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
               <Sparkles size={20} className="text-white" />
@@ -137,21 +151,15 @@ export default function LoginPage() {
               <p className="text-xs text-slate-400">Commission & Payroll System</p>
             </div>
           </div>
-
-          {/* Hero Text */}
           <div className="my-auto">
             <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-4">
               Smarter Tracking.
               <br />
-              <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                Stronger Business.
-              </span>
+              <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Stronger Business.</span>
             </h1>
             <p className="text-slate-300 text-base leading-relaxed mb-10 max-w-md">
               Track sales, manage agents, automate commissions and process payroll — all in one powerful platform.
             </p>
-
-            {/* Features */}
             <div className="space-y-5">
               {features.map((f) => (
                 <div key={f.title} className="flex items-start gap-4">
@@ -166,8 +174,6 @@ export default function LoginPage() {
               ))}
             </div>
           </div>
-
-          {/* Stats Preview Card */}
           <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-5">
             <p className="text-xs text-slate-400 mb-3">Overview</p>
             <div className="grid grid-cols-4 gap-3">
@@ -192,7 +198,6 @@ export default function LoginPage() {
                 <p className="text-[10px] text-rose-400 mt-0.5">↓ 5.7%</p>
               </div>
             </div>
-            {/* Mini chart line */}
             <div className="mt-4 pt-3 border-t border-slate-700/50">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs text-slate-400">Sales Overview</p>
@@ -205,16 +210,8 @@ export default function LoginPage() {
                     <stop offset="100%" stopColor="oklch(0.65 0.2 252.8)" stopOpacity="0" />
                   </linearGradient>
                 </defs>
-                <path
-                  d="M0,50 Q30,45 60,35 T120,30 T180,25 T240,15 T300,10"
-                  fill="none"
-                  stroke="oklch(0.65 0.2 252.8)"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M0,50 Q30,45 60,35 T120,30 T180,25 T240,15 T300,10 L300,60 L0,60 Z"
-                  fill="url(#chartGrad)"
-                />
+                <path d="M0,50 Q30,45 60,35 T120,30 T180,25 T240,15 T300,10" fill="none" stroke="oklch(0.65 0.2 252.8)" strokeWidth="2" />
+                <path d="M0,50 Q30,45 60,35 T120,30 T180,25 T240,15 T300,10 L300,60 L0,60 Z" fill="url(#chartGrad)" />
                 <circle cx="300" cy="10" r="4" fill="oklch(0.65 0.2 252.8)" />
               </svg>
             </div>
@@ -225,24 +222,19 @@ export default function LoginPage() {
       {/* Right Side - Login Form */}
       <div className="flex-1 flex items-center justify-center p-4 sm:p-8 bg-background">
         <div className="w-full max-w-md">
-          {/* Logo for mobile */}
           <div className="lg:hidden flex items-center justify-center gap-2 mb-8">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Sparkles size={16} className="text-primary-foreground" />
             </div>
             <span className="font-bold text-lg text-foreground">PayPro</span>
           </div>
-
           <Card className="p-6 sm:p-8 border border-border shadow-lg bg-card">
-            {/* Logo */}
             <div className="text-center mb-6">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center mx-auto mb-4">
                 <Sparkles size={24} className="text-white" />
               </div>
               <h2 className="text-2xl font-bold text-foreground">Welcome back!</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Login to your {activeTab === "shop" ? "shop" : "agent"} account to continue
-              </p>
+              <p className="text-sm text-muted-foreground mt-1">Login to your {activeTab === "shop" ? "shop" : "agent"} account to continue</p>
             </div>
 
             {/* Tabs */}
@@ -250,61 +242,40 @@ export default function LoginPage() {
               <button
                 onClick={() => { setActiveTab("shop"); setError("") }}
                 className={`flex-1 flex items-center justify-center gap-2 pb-3 text-sm font-medium transition-colors relative ${
-                  activeTab === "shop"
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                  activeTab === "shop" ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Store size={16} />
                 Shop Owner
-                {activeTab === "shop" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-                )}
+                {activeTab === "shop" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
               </button>
               <button
                 onClick={() => { setActiveTab("agent"); setError("") }}
                 className={`flex-1 flex items-center justify-center gap-2 pb-3 text-sm font-medium transition-colors relative ${
-                  activeTab === "agent"
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                  activeTab === "agent" ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <User size={16} />
                 Agent
-                {activeTab === "agent" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-                )}
+                {activeTab === "agent" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
               </button>
             </div>
 
-            {/* Form */}
             <div className="space-y-4">
               {activeTab === "shop" ? (
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">Email Address</label>
                   <div className="relative">
                     <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="email"
-                      placeholder="Enter your email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 h-11"
-                    />
+                    <Input type="email" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10 h-11" />
                   </div>
                 </div>
               ) : (
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">Phone Number</label>
                   <div className="relative">
-                    <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="tel"
-                      placeholder="Enter your phone number"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="pl-10 h-11"
-                    />
+                    <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input type="tel" placeholder="Enter your phone number" value={phone} onChange={(e) => setPhone(e.target.value)} className="pl-10 h-11" />
                   </div>
                 </div>
               )}
@@ -320,61 +291,36 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 h-11"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
 
               {error && (
-                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
-                  {error}
-                </div>
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">{error}</div>
               )}
 
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
-                  />
+                  <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-border text-primary focus:ring-primary" />
                   <span className="text-sm text-muted-foreground">Remember me</span>
                 </label>
                 <button className="text-sm text-primary hover:underline">Forgot password?</button>
               </div>
 
-              <Button
-                onClick={handleSubmit}
-                disabled={loading}
-                className="w-full h-11 btn-gradient text-base font-semibold"
-              >
-                {loading ? (
-                  <Loader2 size={18} className="animate-spin mr-2" />
-                ) : (
-                  <Lock size={18} className="mr-2" />
-                )}
+              <Button onClick={handleSubmit} disabled={loading} className="w-full h-11 btn-gradient text-base font-semibold">
+                {loading ? <Loader2 size={18} className="animate-spin mr-2" /> : <Lock size={18} className="mr-2" />}
                 Login to Dashboard
               </Button>
 
-              {/* Divider */}
               <div className="flex items-center gap-3 my-4">
                 <div className="flex-1 h-px bg-border" />
                 <span className="text-xs text-muted-foreground">or</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
 
-              {/* Google Login */}
-              <Button
-                variant="outline"
-                className="w-full h-11 border-2 hover:bg-secondary/50"
-                onClick={() => setError("Google login coming soon")}
-              >
+              <Button variant="outline" className="w-full h-11 border-2 hover:bg-secondary/50" onClick={() => setError("Google login coming soon")}>
                 <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -385,17 +331,12 @@ export default function LoginPage() {
               </Button>
             </div>
 
-            {/* Footer */}
             <p className="text-center text-sm text-muted-foreground mt-6">
               Don&apos;t have an account?{" "}
               {activeTab === "shop" ? (
-                <Link href="/auth/shop-register" className="text-primary hover:underline font-medium">
-                  Contact your administrator
-                </Link>
+                <Link href="/auth/register" className="text-primary hover:underline font-medium">Contact your administrator</Link>
               ) : (
-                <Link href="/auth/agent-register" className="text-primary hover:underline font-medium">
-                  Register here
-                </Link>
+                <Link href="/auth/register" className="text-primary hover:underline font-medium">Register here</Link>
               )}
             </p>
           </Card>
