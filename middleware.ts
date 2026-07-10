@@ -24,15 +24,12 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session and check auth
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Protect shop routes
   if (request.nextUrl.pathname.startsWith("/shop/") && !user) {
     return NextResponse.redirect(new URL("/auth/shop-login", request.url))
   }
 
-  // Protect agent routes
   if (request.nextUrl.pathname.startsWith("/agent/") && !user) {
     return NextResponse.redirect(new URL("/auth/agent-login", request.url))
   }

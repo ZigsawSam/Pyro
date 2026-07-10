@@ -18,7 +18,7 @@ export async function createServerShopClient() {
               cookieStore.set(name, value, options)
             )
           } catch {
-            // Called from a Server Component: ignore writes, middleware will persist them
+            // Called from Server Component: ignore writes
           }
         },
       },
