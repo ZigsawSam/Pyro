@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -9,195 +8,232 @@ import {
   Wallet,
   TrendingUp,
   FileText,
+  Bell,
+  Settings,
+  Menu,
+  X,
   ChevronDown,
-  ChevronRight,
   LogOut,
   User,
-  Settings,
 } from "lucide-react"
+import { useState } from "react"
 
 interface AgentSidebarProps {
   userName?: string
   agentId?: number
 }
 
-const navSections = [
-  {
-    title: "MAIN",
-    items: [
-      { label: "Dashboard", icon: LayoutDashboard, href: "/agent/dashboard" },
-    ],
-  },
-  {
-    title: "WORK",
-    items: [
-      { label: "My Shops", icon: Store, href: "/agent/shops" },
-      {
-        label: "Earnings",
-        icon: Wallet,
-        href: "/agent/earnings",
-        children: [
-          { label: "Overview", href: "/agent/earnings" },
-          { label: "Commission History", href: "/agent/earnings/commissions" },
-          { label: "Payouts", href: "/agent/earnings/payouts" },
-          { label: "Statements", href: "/agent/earnings/statements" },
-        ],
-      },
-      { label: "Performance", icon: TrendingUp, href: "/agent/performance" },
-    ],
-  },
-  {
-    title: "ANALYTICS",
-    items: [
-      { label: "Reports", icon: FileText, href: "/agent/reports" },
-    ],
-  },
-]
-
-export function AgentSidebar({ userName = "Agent", agentId }: AgentSidebarProps) {
+export function AgentSidebar({ userName, agentId }: AgentSidebarProps) {
   const pathname = usePathname()
-  const [expanded, setExpanded] = useState<string | null>("Earnings")
-  const [showUserMenu, setShowUserMenu] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
+  const [earningsOpen, setEarningsOpen] = useState(true)
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/")
+  const workLinks = [
+    { href: "/agent/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/agent/shops", label: "My Shops", icon: Store },
+  ]
 
-  const initials = userName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2)
+  const earningsLinks = [
+    { href: "/agent/earnings", label: "Overview" },
+    { href: "/agent/earnings/commissions", label: "Commission History" },
+    { href: "/agent/earnings/payouts", label: "Payouts" },
+    { href: "/agent/earnings/statements", label: "Statements" },
+  ]
 
-  const handleLogout = () => {
-    // Trigger logout via parent or redirect
-    window.location.href = "/auth/logout"
-  }
+  const analyticsLinks = [
+    { href: "/agent/performance", label: "Performance", icon: TrendingUp },
+    { href: "/agent/reports", label: "Reports", icon: FileText },
+  ]
+
+  const accountLinks = [
+    { href: "/agent/notifications", label: "Notifications", icon: Bell },
+    { href: "/agent/settings", label: "Settings", icon: Settings },
+  ]
+
+  const isEarningsActive = pathname?.startsWith("/agent/earnings")
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[240px] bg-[#0f172a] text-white flex flex-col z-50">
-      {/* Logo */}
-      <div className="p-5 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-lg">
-          P
-        </div>
-        <div>
-          <p className="font-semibold text-sm leading-tight">PayPro</p>
-          <p className="text-[11px] text-slate-400">Agent Portal</p>
-        </div>
-      </div>
+    <>
+      {/* Mobile menu button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-card border border-border shadow-sm hover:bg-secondary transition-colors"
+      >
+        {isOpen ? <X size={20} /> : <Menu size={20} />}
+      </button>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-4">
-        {navSections.map((section) => (
-          <div key={section.title}>
-            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-3 mb-1.5">
-              {section.title}
-            </p>
-            <div className="space-y-0.5">
-              {section.items.map((item) => {
-                const active = isActive(item.href)
-                const hasChildren = item.children && item.children.length > 0
-                const isExpanded = expanded === item.label
+      {/* Sidebar overlay for mobile */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 lg:hidden animate-fade-in"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
 
-                return (
-                  <div key={item.label}>
+      {/* Sidebar */}
+      <aside
+        className={`fixed left-0 top-0 bottom-0 w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-300 ease-out z-40 overflow-y-auto ${
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
+        <div className="p-6 border-b border-sidebar-border">
+          <h1 className="text-2xl font-bold text-sidebar-primary tracking-tight">PayPro</h1>
+          <p className="text-sm text-sidebar-foreground/60 mt-1">Agent Portal</p>
+        </div>
+
+        <nav className="p-4">
+          {/* WORK section */}
+          <div className="space-y-0.5">
+            {workLinks.map(({ href, label, icon: Icon }) => {
+              const isActive = pathname === href || pathname?.startsWith(href + "/")
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-1.5 transition-all duration-200 ${
+                    isActive
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/20"
+                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  }`}
+                >
+                  <Icon size={18} className={isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/60"} />
+                  <span className="text-sm font-medium">{label}</span>
+                  {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-sidebar-primary-foreground" />}
+                </Link>
+              )
+            })}
+
+            {/* Earnings with submenu */}
+            <button
+              onClick={() => setEarningsOpen(!earningsOpen)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-1.5 transition-all duration-200 w-full ${
+                isEarningsActive
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/20"
+                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              }`}
+            >
+              <Wallet size={18} className={isEarningsActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/60"} />
+              <span className="text-sm font-medium flex-1 text-left">Earnings</span>
+              <ChevronDown size={14} className={`transition-transform ${earningsOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {earningsOpen && (
+              <div className="ml-4 mb-2 space-y-0.5 border-l-2 border-sidebar-border/50 pl-3">
+                {earningsLinks.map(({ href, label }) => {
+                  const isActive = pathname === href
+                  return (
                     <Link
-                      href={item.href}
-                      onClick={(e) => {
-                        if (hasChildren) {
-                          e.preventDefault()
-                          setExpanded(isExpanded ? null : item.label)
-                        }
-                      }}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative ${
-                        active
-                          ? "bg-blue-600 text-white font-medium"
-                          : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                      key={href}
+                      href={href}
+                      onClick={() => setIsOpen(false)}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        isActive
+                          ? "text-sidebar-primary font-medium"
+                          : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
                       }`}
                     >
-                      <item.icon size={18} />
-                      <span className="flex-1">{item.label}</span>
-                      {hasChildren && (
-                        <span className="text-slate-400">
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </span>
-                      )}
+                      {label}
                     </Link>
+                  )
+                })}
+              </div>
+            )}
 
-                    {/* Submenu */}
-                    {hasChildren && isExpanded && (
-                      <div className="ml-6 mt-0.5 space-y-0.5 border-l border-slate-700 pl-3">
-                        {item.children.map((child) => {
-                          const childActive = pathname === child.href
-                          return (
-                            <Link
-                              key={child.label}
-                              href={child.href}
-                              className={`block px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                                childActive
-                                  ? "text-blue-400 font-medium"
-                                  : "text-slate-400 hover:text-slate-200"
-                              }`}
-                            >
-                              {child.label}
-                            </Link>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+            {analyticsLinks.map(({ href, label, icon: Icon }) => {
+              const isActive = pathname === href || pathname?.startsWith(href + "/")
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-1.5 transition-all duration-200 ${
+                    isActive
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/20"
+                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  }`}
+                >
+                  <Icon size={18} className={isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/60"} />
+                  <span className="text-sm font-medium">{label}</span>
+                  {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-sidebar-primary-foreground" />}
+                </Link>
+              )
+            })}
           </div>
-        ))}
-      </nav>
 
-      {/* User Card with Dropdown */}
-      <div className="p-3 relative">
-        <button
-          onClick={() => setShowUserMenu(!showUserMenu)}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors"
-        >
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold">
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0 text-left">
-            <p className="text-sm font-medium truncate">{userName}</p>
-            <p className="text-[11px] text-slate-400">Agent ID: AGT-{String(agentId || 0).padStart(4, "0")}</p>
-          </div>
-          <ChevronDown size={14} className={`text-slate-400 transition-transform ${showUserMenu ? "rotate-180" : ""}`} />
-        </button>
+          {/* Divider */}
+          <div className="my-3 border-t border-sidebar-border/50" />
 
-        {showUserMenu && (
-          <div className="absolute bottom-full left-3 right-3 mb-2 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+          {/* ACCOUNT section */}
+          <div className="space-y-0.5">
+            {accountLinks.map(({ href, label, icon: Icon }) => {
+              const isActive = pathname === href || pathname?.startsWith(href + "/")
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-1.5 transition-all duration-200 ${
+                    isActive
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/20"
+                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  }`}
+                >
+                  <Icon size={18} className={isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/60"} />
+                  <span className="text-sm font-medium">{label}</span>
+                  {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-sidebar-primary-foreground" />}
+                </Link>
+              )
+            })}
+          </div>
+
+          {/* Divider */}
+          <div className="my-3 border-t border-sidebar-border/50" />
+
+          {/* Profile + Logout */}
+          <div className="space-y-0.5">
             <Link
               href="/agent/profile"
-              className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-              onClick={() => setShowUserMenu(false)}
+              onClick={() => setIsOpen(false)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-1.5 transition-all duration-200 ${
+                pathname === "/agent/profile"
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/20"
+                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              }`}
             >
-              <User size={16} className="text-slate-400" />
-              Profile
+              <User size={18} className={pathname === "/agent/profile" ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/60"} />
+              <span className="text-sm font-medium">Profile</span>
+              {pathname === "/agent/profile" && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-sidebar-primary-foreground" />}
             </Link>
-            <Link
-              href="/agent/settings"
-              className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-              onClick={() => setShowUserMenu(false)}
-            >
-              <Settings size={16} className="text-slate-400" />
-              Settings
-            </Link>
-            <div className="border-t border-slate-100" />
+
             <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
+              onClick={() => {
+                setIsOpen(false)
+                window.location.href = "/auth/logout"
+              }}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl mb-1.5 transition-all duration-200 w-full text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             >
-              <LogOut size={16} />
-              Logout
+              <LogOut size={18} className="text-sidebar-foreground/60" />
+              <span className="text-sm font-medium">Logout</span>
             </button>
           </div>
-        )}
-      </div>
-    </aside>
+        </nav>
+
+        {/* User card at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border/50">
+          <div className="flex items-center gap-3 px-2">
+            <div className="w-8 h-8 rounded-full bg-sidebar-primary/20 flex items-center justify-center">
+              <span className="text-xs font-bold text-sidebar-primary">
+                {(userName || "U").charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{userName || "User"}</p>
+              <p className="text-xs text-sidebar-foreground/50">Agent ID: AGT-{String(agentId || 0).padStart(4, "0")}</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </>
   )
 }
