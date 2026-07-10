@@ -13,6 +13,8 @@ interface StaffAttendance {
   staff_id: number
   staff_name: string
   status: "present" | "absent" | "half"
+  logged: boolean
+  existingStatus?: string
 }
 
 interface AttendanceLog {
@@ -55,14 +57,16 @@ export default function ShopAttendancePage() {
         .eq("attendance_date", date)
 
       const attendanceMap = (attendanceData || []).reduce((acc: any, a: any) => {
-        acc[a.staff_id] = a
+        acc[a.staff_id] = a.status
         return acc
       }, {})
 
       const formattedStaff = (staffData || []).map((s: any) => ({
         staff_id: s.id,
         staff_name: s.name,
-        status: attendanceMap[s.id]?.status || "present",
+        status: attendanceMap[s.id] || "present",
+        logged: !!attendanceMap[s.id],
+        existingStatus: attendanceMap[s.id],
       }))
 
       setStaff(formattedStaff)
@@ -114,6 +118,11 @@ export default function ShopAttendancePage() {
         .upsert(records, { onConflict: "shop_id,staff_id,attendance_date" })
 
       if (error) throw error
+
+      // Refresh both attendance and logs without page reload
+      await fetchAttendance()
+      if (showLogs) await fetchLogs()
+
       alert("Attendance saved!")
     } catch (e) {
       console.error(e)
@@ -123,7 +132,7 @@ export default function ShopAttendancePage() {
     }
   }
 
-  const updateStaff = (staffId: number, status: string) => {
+  const updateStatus = (staffId: number, status: string) => {
     setStaff((prev) => prev.map((s) => s.staff_id === staffId ? { ...s, status: status as any } : s))
   }
 
@@ -194,17 +203,48 @@ export default function ShopAttendancePage() {
           <div className="space-y-3">
             {staff.map((s) => (
               <Card key={s.staff_id} className="p-4">
-                <div className="flex items-center gap-4">
-                  <p className="font-medium w-40">{s.staff_name}</p>
-                  <select
-                    value={s.status}
-                    onChange={(e) => updateStaff(s.staff_id, e.target.value)}
-                    className="rounded border border-input bg-background px-3 py-2"
-                  >
-                    <option value="present">Present</option>
-                    <option value="absent">Absent</option>
-                    <option value="half">Half Day</option>
-                  </select>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <p className="font-medium w-40">{s.staff_name}</p>
+                    {s.logged && (
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        s.existingStatus === "present" ? "bg-green-100 text-green-800" :
+                        s.existingStatus === "absent" ? "bg-red-100 text-red-800" :
+                        "bg-yellow-100 text-yellow-800"
+                      }`}>
+                        Logged: {s.existingStatus}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant={s.status === "present" ? "default" : "outline"}
+                      onClick={() => updateStatus(s.staff_id, "present")}
+                      disabled={s.logged && s.existingStatus !== "present"}
+                      className={s.logged && s.existingStatus !== "present" ? "opacity-50 cursor-not-allowed" : ""}
+                    >
+                      Present
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={s.status === "half" ? "default" : "outline"}
+                      onClick={() => updateStatus(s.staff_id, "half")}
+                      disabled={s.logged && s.existingStatus !== "half"}
+                      className={s.logged && s.existingStatus !== "half" ? "opacity-50 cursor-not-allowed" : ""}
+                    >
+                      Half Day
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={s.status === "absent" ? "default" : "outline"}
+                      onClick={() => updateStatus(s.staff_id, "absent")}
+                      disabled={s.logged && s.existingStatus !== "absent"}
+                      className={s.logged && s.existingStatus !== "absent" ? "opacity-50 cursor-not-allowed" : ""}
+                    >
+                      Absent
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}
