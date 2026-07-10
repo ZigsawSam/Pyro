@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Receipt, QrCode, Wallet, CalendarDays, Clock } from "lucide-react"
+import { Loader2, Receipt, QrCode, Wallet } from "lucide-react"
 import QRCode from "qrcode"
 import { createShopClient } from "@/lib/supabase/shop-client"
 
@@ -27,18 +27,9 @@ interface PayStaffDialogProps {
   onPaid: () => void
 }
 
-interface AttendanceRecord {
-  id: number
-  attendance_date: string
-  status: string
-  work_hours: number
-  overtime_hours: number
-}
-
 export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: PayStaffDialogProps) {
   const supabase = createShopClient()
   const [isLoading, setIsLoading] = useState(false)
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
   const [showStatement, setShowStatement] = useState(false)
   const [paymentMode, setPaymentMode] = useState<"full" | "custom" | null>(null)
   const [customAmount, setCustomAmount] = useState("")
@@ -48,40 +39,10 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
   const [timeLeft, setTimeLeft] = useState(300)
   const [paymentAmount, setPaymentAmount] = useState(0)
   const [paymentCompleted, setPaymentCompleted] = useState(false)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const pendingAmount = useMemo(() => {
     return Number(staff?.pending_salary || staff?.pending_payroll || 0)
   }, [staff])
-
-  useEffect(() => {
-    if (!open || !staff) return
-
-    const fetchAttendance = async () => {
-      setIsLoading(true)
-      try {
-        const now = new Date()
-        const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
-
-        const { data, error } = await supabase
-          .from("attendance")
-          .select("id, attendance_date, status, work_hours, overtime_hours")
-          .eq("shop_id", shopId)
-          .eq("staff_id", staff.id)
-          .gte("attendance_date", monthStart)
-          .order("attendance_date", { ascending: false })
-
-        if (error) throw error
-        setAttendance(data || [])
-      } catch (error) {
-        console.error(error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchAttendance()
-  }, [open, staff, shopId, supabase])
 
   const reset = () => {
     setPaymentMode(null)
@@ -93,7 +54,6 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
     setPaymentAmount(0)
     setPaymentCompleted(false)
     setShowStatement(false)
-    setErrorMsg(null)
   }
 
   useEffect(() => {
@@ -166,40 +126,51 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
     handleCreatePayout(amount)
   }
 
+  // Same as agent: just record payout, no staff table update
   const handleConfirmPayment = async () => {
     if (!staff || !paymentAmount) return
 
     setIsLoading(true)
-    setErrorMsg(null)
     try {
-      const { error: payoutError } = await supabase.from("payouts").insert({
+      const pendingAmount = Number(staff?.pending_salary || staff?.pending_payroll || 0)
+      let pendingDeducted = 0
+      let advanceAmount = 0
+
+      if (pendingAmount > 0) {
+        if (paymentAmount >= pendingAmount) {
+          pendingDeducted = pendingAmount
+          advanceAmount = paymentAmount - pendingAmount
+        } else {
+          pendingDeducted = paymentAmount
+          advanceAmount = 0
+        }
+      } else {
+        pendingDeducted = 0
+        advanceAmount = paymentAmount
+      }
+
+      const { error } = await supabase.from("payouts").insert({
         shop_id: shopId,
-        person_type: "staff",
         staff_id: staff.id,
-        amount_paid: paymentAmount,
+        person_type: "staff",
+        amount_paid: Number(paymentAmount),
         payment_date: new Date().toISOString().split("T")[0],
-        remarks: paymentMode === "full" ? "Full payout via QR" : `Custom payout via QR (${paymentAmount})`,
+        remarks: `QR: Pending ₹${pendingDeducted}, Advance ₹${advanceAmount}`,
       })
 
-      if (payoutError) throw payoutError
+      if (error) throw error
 
       setPaymentCompleted(true)
       onPaid()
       reset()
       onOpenChange(false)
-    } catch (error: any) {
+    } catch (error) {
       console.error(error)
-      setErrorMsg(error.message || "Failed to process payment")
+      alert("Failed to record payment")
     } finally {
       setIsLoading(false)
     }
   }
-
-  const presentDays = attendance.filter(a => a.status === "present").length
-  const halfDays = attendance.filter(a => a.status === "half").length
-  const absentDays = attendance.filter(a => a.status === "absent").length
-  const totalWorkHours = attendance.reduce((sum, a) => sum + Number(a.work_hours || 0), 0)
-  const totalOvertime = attendance.reduce((sum, a) => sum + Number(a.overtime_hours || 0), 0)
 
   return (
     <Dialog open={open} onOpenChange={(value) => { if (!value) reset(); onOpenChange(value) }}>
@@ -207,12 +178,6 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
         <DialogHeader>
           <DialogTitle>Pay Staff Member</DialogTitle>
         </DialogHeader>
-
-        {errorMsg && (
-          <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {errorMsg}
-          </div>
-        )}
 
         {!qrValue ? (
           <div className="space-y-4">
@@ -233,68 +198,12 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
               </Button>
             </div>
 
-            {showStatement ? (
-              <div className="rounded-lg border p-3">
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  </div>
-                ) : attendance.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No attendance recorded this month.</p>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-4 gap-2 text-sm">
-                      <div className="rounded bg-green-50 p-2 text-center">
-                        <p className="font-bold text-green-700">{presentDays}</p>
-                        <p className="text-xs text-green-600">Present</p>
-                      </div>
-                      <div className="rounded bg-yellow-50 p-2 text-center">
-                        <p className="font-bold text-yellow-700">{halfDays}</p>
-                        <p className="text-xs text-yellow-600">Half Day</p>
-                      </div>
-                      <div className="rounded bg-red-50 p-2 text-center">
-                        <p className="font-bold text-red-700">{absentDays}</p>
-                        <p className="text-xs text-red-600">Absent</p>
-                      </div>
-                      <div className="rounded bg-blue-50 p-2 text-center">
-                        <p className="font-bold text-blue-700">{totalWorkHours}h</p>
-                        <p className="text-xs text-blue-600">Hours</p>
-                      </div>
-                    </div>
-                    <div className="space-y-1 max-h-48 overflow-y-auto">
-                      {attendance.map((record) => (
-                        <div key={record.id} className="flex items-center justify-between rounded border p-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <CalendarDays className="h-3 w-3 text-muted-foreground" />
-                            <span>{record.attendance_date}</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className={`text-xs px-2 py-0.5 rounded ${
-                              record.status === "present" ? "bg-green-100 text-green-700" :
-                              record.status === "half" ? "bg-yellow-100 text-yellow-700" :
-                              "bg-red-100 text-red-700"
-                            }`}>
-                              {record.status}
-                            </span>
-                            <span className="text-xs text-muted-foreground">{record.work_hours}h</span>
-                            {record.overtime_hours > 0 && (
-                              <span className="text-xs text-orange-600">+{record.overtime_hours}h OT</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : null}
-
             <div className="rounded-lg border p-4">
               <p className="mb-3 text-sm font-medium">Choose payment option</p>
               <div className="flex flex-wrap gap-2">
                 <Button onClick={handlePayFull} disabled={isLoading || pendingAmount <= 0} className="gap-2">
                   <Wallet className="h-4 w-4" />
-                  Pay Full (₹{pendingAmount.toLocaleString()})
+                  Pay Full
                 </Button>
                 <Button onClick={() => setPaymentMode("custom")} variant="outline" className="gap-2">
                   <QrCode className="h-4 w-4" />
@@ -325,7 +234,6 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
               This QR is generated for {staff?.name} using their saved {qrType === "upi" ? "UPI" : qrType === "bank" ? "bank transfer" : "payment"} details.
             </p>
             <div className="mt-3 rounded border bg-background px-3 py-2 text-sm font-medium text-foreground">
-              <Clock className="inline h-3 w-3 mr-1" />
               QR expires in {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
             </div>
             {qrImage ? <img src={qrImage} alt="Staff payout QR" className="mx-auto mt-4 h-48 w-48 rounded border bg-white p-2" /> : null}
