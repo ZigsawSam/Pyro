@@ -74,8 +74,7 @@ export default function ShopLoginPage() {
         return
       }
 
-      router.push(`/shop/${shop.id}/dashboard`)
-    } catch (err: any) {
+window.location.href = `/shop/${shop.id}/dashboard`    } catch (err: any) {
       console.error("Login error:", err)
       setError(err.message || "Login failed")
       setLoading(false)
