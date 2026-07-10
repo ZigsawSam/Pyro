@@ -5,10 +5,11 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
-import { Loader2, Plus, Search, Phone, UserCircle } from "lucide-react"
+import { Loader2, Plus, Search, Phone, UserCircle, CreditCard, UserRound } from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 import { StaffProfileDialog } from "@/components/staff/staff-profile-dialog"
+import { PayStaffDialog } from "@/components/staff/pay-staff-dialog"
 
 interface StaffMember {
   id: number
@@ -20,6 +21,11 @@ interface StaffMember {
   working_hours_per_day: number
   overtime_rate: number
   is_active: boolean
+  account_name?: string
+  account_number?: string
+  bank_name?: string
+  ifsc_code?: string
+  upi_id?: string
 }
 
 interface AttendanceSummary {
@@ -39,6 +45,7 @@ export default function ShopStaffPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null)
   const [showProfile, setShowProfile] = useState(false)
+  const [showPayDialog, setShowPayDialog] = useState(false)
   const [attendanceSummary, setAttendanceSummary] = useState<Record<number, AttendanceSummary>>({})
 
   useEffect(() => {
@@ -50,7 +57,7 @@ export default function ShopStaffPage() {
     try {
       const { data: staffData, error: staffError } = await supabase
         .from("staff")
-        .select("id, name, phone, role, salary_type, base_salary, working_hours_per_day, overtime_rate, is_active")
+        .select("id, name, phone, role, salary_type, base_salary, working_hours_per_day, overtime_rate, is_active, account_name, account_number, bank_name, ifsc_code, upi_id")
         .eq("shop_id", shopId)
         .eq("is_active", true)
 
@@ -119,9 +126,14 @@ export default function ShopStaffPage() {
       s.phone.includes(searchQuery)
   )
 
-  const handleProfileClick = (member: StaffMember) => {
+  const openProfile = (member: StaffMember) => {
     setSelectedStaff(member)
     setShowProfile(true)
+  }
+
+  const openPay = (member: StaffMember) => {
+    setSelectedStaff(member)
+    setShowPayDialog(true)
   }
 
   const handleAddStaff = () => {
@@ -159,7 +171,7 @@ export default function ShopStaffPage() {
             const summary = attendanceSummary[member.id]
 
             return (
-              <Card key={member.id} className="p-4">
+              <Card key={member.id} className="p-4 group">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <UserCircle className="h-10 w-10 text-muted-foreground" />
@@ -184,11 +196,11 @@ export default function ShopStaffPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <Button variant="outline" size="sm" onClick={() => handleProfileClick(member)}>
-                    Profile
+                  <Button variant="outline" size="sm" onClick={() => openProfile(member)}>
+                    <UserRound className="mr-1 h-3 w-3" /> Profile
                   </Button>
-                  <Button size="sm" onClick={() => window.location.href = `/shop/${shopId}/salary`}>
-                    Pay
+                  <Button size="sm" onClick={() => openPay(member)} disabled={pendingSalary === 0}>
+                    <CreditCard className="mr-1 h-3 w-3" /> Pay
                   </Button>
                 </div>
               </Card>
@@ -211,6 +223,26 @@ export default function ShopStaffPage() {
         }}
         onDeleted={() => {
           setShowProfile(false)
+          fetchStaff()
+        }}
+      />
+
+      <PayStaffDialog
+        open={showPayDialog}
+        onOpenChange={setShowPayDialog}
+        shopId={shopId}
+        staff={selectedStaff ? {
+          id: selectedStaff.id,
+          name: selectedStaff.name,
+          pending_salary: calculatePendingSalary(selectedStaff),
+          account_name: selectedStaff.account_name,
+          account_number: selectedStaff.account_number,
+          bank_name: selectedStaff.bank_name,
+          ifsc_code: selectedStaff.ifsc_code,
+          upi_id: selectedStaff.upi_id,
+        } : null}
+        onPaid={() => {
+          setShowPayDialog(false)
           fetchStaff()
         }}
       />
