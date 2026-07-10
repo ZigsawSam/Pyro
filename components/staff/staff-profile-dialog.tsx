@@ -90,6 +90,8 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
           role: formData.role,
           salary_type: formData.salary_type,
           base_salary: Number(formData.base_salary),
+          working_hours_per_day: Number(formData.working_hours_per_day) || 8,
+          overtime_rate: Number(formData.overtime_rate) || 0,
           description: formData.description,
           account_name: formData.account_name,
           account_number: formData.account_number,
@@ -194,8 +196,18 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Base Salary</label>
+                <label className="mb-1 block text-sm font-medium">
+                  {formData.salary_type === "monthly" ? "Monthly Salary" : formData.salary_type === "daily" ? "Daily Rate" : "Hourly Rate"}
+                </label>
                 <Input type="number" value={formData.base_salary} onChange={(e) => setFormData({ ...formData, base_salary: e.target.value })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Working Hours/Day</label>
+                <Input type="number" value={formData.working_hours_per_day} onChange={(e) => setFormData({ ...formData, working_hours_per_day: e.target.value })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Overtime Rate (₹/hr)</label>
+                <Input type="number" value={formData.overtime_rate} onChange={(e) => setFormData({ ...formData, overtime_rate: e.target.value })} />
               </div>
               <div className="md:col-span-2">
                 <label className="mb-1 block text-sm font-medium">Description</label>
@@ -228,6 +240,8 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
                 <p><span className="font-medium">Role:</span> {staff.role}</p>
                 <p><span className="font-medium">Salary Type:</span> {staff.salary_type}</p>
                 <p><span className="font-medium">Base Salary:</span> ₹{Number(staff.base_salary || 0).toLocaleString()}</p>
+                <p><span className="font-medium">Working Hours/Day:</span> {staff.working_hours_per_day || 8} hrs</p>
+                <p><span className="font-medium">Overtime Rate:</span> ₹{staff.overtime_rate || 0}/hr</p>
                 <p><span className="font-medium">Working Hours/Day:</span> {staff.working_hours_per_day || 8} hrs</p>
                 <p><span className="font-medium">Overtime Rate:</span> ₹{staff.overtime_rate || 0}/hr</p>
                 <p><span className="font-medium">Amount to be paid today:</span> ₹{Number(staff.today_due || 0).toLocaleString()}</p>
