@@ -131,7 +131,7 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
         paymentType = "upi"
       } else if (staff.account_number || staff.bank_name || staff.ifsc_code) {
         paymentPayload = [
-          `Staff payout`,
+          "Staff payout",
           `Name: ${staff.account_name || staff.name}`,
           `Account: ${staff.account_number || "-"}`,
           `Bank: ${staff.bank_name || "-"}`,
@@ -140,7 +140,7 @@ export function PayStaffDialog({ open, onOpenChange, shopId, staff, onPaid }: Pa
         ].join("\n")
         paymentType = "bank"
       } else {
-        paymentPayload = [`Staff payout`, `Name: ${staff.name}`, `Amount: ${amountLabel}`].join("\n")
+        paymentPayload = ["Staff payout", `Name: ${staff.name}`, `Amount: ${amountLabel}`].join("\n")
       }
 
       const generatedQr = await QRCode.toDataURL(paymentPayload)
