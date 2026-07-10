@@ -17,80 +17,51 @@ import {
   UserCheck,
   Receipt,
   Sparkles,
+  Lock,
+  ChevronDown,
+  ShieldCheck,
+  FileCheck,
+  Plus,
+  LogIn,
+  UserPlus,
 } from "lucide-react"
 
 const stats = [
-  { value: "10K+", label: "Transactions Processed", suffix: "" },
-  { value: "500+", label: "Active Shops", suffix: "" },
-  { value: "2K+", label: "Agents Onboarded", suffix: "" },
-  { value: "99.9%", label: "Uptime Guaranteed", suffix: "" },
+  { value: "500+", label: "Shops Onboarded", icon: Store, color: "text-blue-500", bg: "bg-blue-500/10" },
+  { value: "10K+", label: "Active Agents", icon: Users, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+  { value: "₹2.4M+", label: "Commissions Processed", icon: TrendingUp, color: "text-amber-500", bg: "bg-amber-500/10" },
+  { value: "99.9%", label: "Uptime & Reliability", icon: ShieldCheck, color: "text-rose-500", bg: "bg-rose-500/10" },
 ]
 
 const features = [
   {
     icon: BarChart3,
     title: "Commission Tracking",
-    description: "Real-time tracking of agent sales with automatic commission calculation. No more manual spreadsheets.",
+    description: "Real-time tracking of agent sales and automatic commission calculation.",
     color: "text-blue-500",
     bg: "bg-blue-500/10",
+    linkColor: "text-blue-500 hover:text-blue-600",
   },
   {
     icon: Users,
     title: "Payroll Management",
-    description: "Manage staff attendance, calculate salaries automatically, and process payouts in one click.",
+    description: "Manage staff attendance, salary, withdrawals, and generate monthly payroll.",
     color: "text-emerald-500",
     bg: "bg-emerald-500/10",
+    linkColor: "text-emerald-500 hover:text-emerald-600",
   },
   {
     icon: TrendingUp,
     title: "Analytics & Reports",
-    description: "Comprehensive reports on commissions, payroll, and staff productivity with date-range filtering.",
+    description: "Comprehensive reports on commissions, payroll, and staff productivity.",
     color: "text-amber-500",
     bg: "bg-amber-500/10",
-  },
-  {
-    icon: Shield,
-    title: "Secure & Isolated",
-    description: "Multi-tenant architecture ensures each shop's data is completely isolated with secure authentication.",
-    color: "text-rose-500",
-    bg: "bg-rose-500/10",
-  },
-  {
-    icon: Zap,
-    title: "Instant Payouts",
-    description: "Process payments to agents and staff instantly. Track advances, pending amounts, and history.",
-    color: "text-violet-500",
-    bg: "bg-violet-500/10",
-  },
-  {
-    icon: Clock,
-    title: "Attendance Logging",
-    description: "Log daily attendance for all staff members. Auto-calculate salary based on present, half-day, and overtime.",
-    color: "text-cyan-500",
-    bg: "bg-cyan-500/10",
+    linkColor: "text-amber-500 hover:text-amber-600",
   },
 ]
 
-const steps = [
-  {
-    icon: Store,
-    title: "Create Your Shop",
-    description: "Sign up as a shop owner and set up your business profile in under 2 minutes.",
-  },
-  {
-    icon: UserCheck,
-    title: "Onboard Agents & Staff",
-    description: "Add agents to track commissions and staff to manage payroll and attendance.",
-  },
-  {
-    icon: Receipt,
-    title: "Track & Pay",
-    description: "Record sales, log attendance, generate reports, and process payouts seamlessly.",
-  },
-]
-
-function AnimatedCounter({ value, suffix = "" }: { value: string; suffix?: string }) {
-  const [display, setDisplay] = useState("0")
+function AnimatedCounter({ value }: { value: string }) {
+  const [display, setDisplay] = useState(value)
   const ref = useRef<HTMLDivElement>(null)
   const hasAnimated = useRef(false)
 
@@ -100,8 +71,15 @@ function AnimatedCounter({ value, suffix = "" }: { value: string; suffix?: strin
         entries.forEach((entry) => {
           if (entry.isIntersecting && !hasAnimated.current) {
             hasAnimated.current = true
-            const num = parseFloat(value.replace(/[^0-9.]/g, ""))
-            const prefix = value.replace(/[0-9.]/g, "")
+            // Extract numeric part and suffix
+            const match = value.match(/^([₹$]?)([0-9.]+)([K+M+%+]?)$/)
+            if (!match) {
+              setDisplay(value)
+              return
+            }
+            const prefix = match[1] || ""
+            const num = parseFloat(match[2])
+            const suffix = match[3] || ""
             const duration = 1500
             const startTime = Date.now()
             const animate = () => {
@@ -109,11 +87,13 @@ function AnimatedCounter({ value, suffix = "" }: { value: string; suffix?: strin
               const progress = Math.min(elapsed / duration, 1)
               const easeOut = 1 - Math.pow(1 - progress, 3)
               const current = num * easeOut
+              let formatted: string
               if (value.includes(".")) {
-                setDisplay(prefix + current.toFixed(1) + suffix)
+                formatted = current.toFixed(1)
               } else {
-                setDisplay(prefix + Math.floor(current).toLocaleString() + suffix)
+                formatted = Math.floor(current).toLocaleString()
               }
+              setDisplay(prefix + formatted + suffix)
               if (progress < 1) requestAnimationFrame(animate)
             }
             animate()
@@ -124,28 +104,12 @@ function AnimatedCounter({ value, suffix = "" }: { value: string; suffix?: strin
     )
     if (ref.current) observer.observe(ref.current)
     return () => observer.disconnect()
-  }, [value, suffix])
+  }, [value])
 
   return (
-    <div ref={ref} className="text-3xl sm:text-4xl font-bold text-foreground">
-      {display || value}
+    <div ref={ref} className="text-2xl sm:text-3xl font-bold text-foreground">
+      {display}
     </div>
-  )
-}
-
-function FloatingParticle({ delay, size, left, duration }: { delay: number; size: number; left: string; duration: number }) {
-  return (
-    <div
-      className="absolute rounded-full bg-primary/20 animate-float-slow pointer-events-none"
-      style={{
-        width: size,
-        height: size,
-        left,
-        top: `${Math.random() * 80 + 10}%`,
-        animationDelay: `${delay}s`,
-        animationDuration: `${duration}s`,
-      }}
-    />
   )
 }
 
@@ -160,29 +124,17 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Animated background gradient */}
+      {/* Subtle background gradient */}
       <div className="fixed inset-0 pointer-events-none">
-        <div
-          className="absolute inset-0 animate-gradient opacity-30 dark:opacity-20"
-          style={{
-            background: "linear-gradient(-45deg, oklch(0.85 0.1 252.8), oklch(0.9 0.08 200), oklch(0.88 0.1 280), oklch(0.92 0.06 160))",
-            backgroundSize: "400% 400%",
-          }}
-        />
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-glow" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/10 rounded-full blur-3xl animate-glow" style={{ animationDelay: "1.5s" }} />
-        {/* Floating particles */}
-        <FloatingParticle delay={0} size={8} left="10%" duration={7} />
-        <FloatingParticle delay={2} size={6} left="25%" duration={9} />
-        <FloatingParticle delay={1} size={10} left="70%" duration={8} />
-        <FloatingParticle delay={3} size={5} left="85%" duration={10} />
-        <FloatingParticle delay={1.5} size={7} left="50%" duration={6} />
+        <div className="absolute top-0 left-0 right-0 h-[600px] bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
+        <div className="absolute top-20 left-1/4 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute top-40 right-1/4 w-72 h-72 bg-violet-500/5 rounded-full blur-3xl" />
       </div>
 
       {/* Navbar */}
       <nav
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          scrolled ? "bg-background/80 backdrop-blur-lg border-b border-border shadow-sm" : "bg-transparent"
+          scrolled ? "bg-background/90 backdrop-blur-lg border-b border-border shadow-sm" : "bg-transparent"
         }`}
       >
         <div className="container mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
@@ -190,88 +142,102 @@ export default function Home() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Sparkles size={16} className="text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg text-foreground">PayPro</span>
+            <div className="leading-tight">
+              <span className="font-bold text-base text-foreground block">PayPro</span>
+              <span className="text-[10px] text-muted-foreground hidden sm:block">Commission & Payroll System</span>
+            </div>
           </div>
+
+          {/* Nav Links - Desktop */}
+          <div className="hidden md:flex items-center gap-8">
+            <button className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</button>
+            <button className="text-sm text-muted-foreground hover:text-foreground transition-colors">How It Works</button>
+            <button className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</button>
+            <button className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+              Resources <ChevronDown size={14} />
+            </button>
+          </div>
+
           <div className="flex items-center gap-3">
             <ThemeToggle />
+            <Link href="/auth/shop-login" className="hidden sm:block">
+              <Button size="sm" className="btn-gradient px-4 h-9 text-sm">
+                <Lock size={14} className="mr-1.5" />
+                Shop Owner Login
+              </Button>
+            </Link>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-32 sm:pt-40 pb-16 sm:pb-24">
+      <section className="relative pt-32 sm:pt-40 pb-8">
         <div className="container mx-auto px-4 sm:px-6 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-8 animate-fade-in">
             <Sparkles size={14} className="text-primary" />
-            <span className="text-sm font-medium text-primary">Retail Management Platform</span>
+            <span className="text-sm font-medium text-primary">All-in-One Retail Management Platform</span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold text-foreground mb-6 leading-tight animate-fade-in" style={{ animationDelay: "0.1s" }}>
-            Commission &{" "}
-            <span className="bg-gradient-to-r from-primary to-violet-500 bg-clip-text text-transparent">
-              Payroll System
-            </span>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground mb-6 leading-tight animate-fade-in" style={{ animationDelay: "0.1s" }}>
+            Commission & Payroll
+            <br />
+            Made <span className="bg-gradient-to-r from-primary to-violet-500 bg-clip-text text-transparent">Simple, Scalable & Smart</span>
           </h1>
 
-          <p className="text-lg sm:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
+          <p className="text-base sm:text-lg text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
             Automate commission tracking, manage agents across multiple shops, and process payroll seamlessly.
             Built for retail businesses that scale.
           </p>
 
+          {/* Shop Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6 animate-fade-in" style={{ animationDelay: "0.3s" }}>
             <Link href="/auth/shop-login">
-              <Button size="lg" className="btn-gradient px-8 h-12 text-base font-semibold">
+              <Button size="lg" className="btn-gradient px-6 h-12 text-base font-semibold rounded-xl">
+                <Store size={18} className="mr-2" />
                 Shop Owner Login
-                <ArrowRight size={18} className="ml-2" />
+                <ArrowRight size={16} className="ml-2" />
               </Button>
             </Link>
             <Link href="/auth/shop-register">
-              <Button size="lg" variant="outline" className="px-8 h-12 text-base font-semibold border-2 hover:bg-secondary/50">
+              <Button size="lg" variant="outline" className="px-6 h-12 text-base font-semibold rounded-xl border-2 hover:bg-secondary/50">
+                <Plus size={18} className="mr-2" />
                 Create Shop
+                <ArrowRight size={16} className="ml-2 text-muted-foreground" />
               </Button>
             </Link>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in" style={{ animationDelay: "0.4s" }}>
+          {/* OR ACCESS AS Divider */}
+          <div className="flex items-center gap-4 justify-center mb-6 max-w-md mx-auto animate-fade-in" style={{ animationDelay: "0.4s" }}>
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">OR ACCESS AS</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          {/* Agent Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in" style={{ animationDelay: "0.5s" }}>
             <Link href="/auth/agent-login">
-              <Button size="lg" variant="secondary" className="px-8 h-11 text-base">
+              <Button size="lg" variant="outline" className="px-6 h-12 text-base rounded-xl border-2 hover:bg-secondary/50">
+                <LogIn size={18} className="mr-2 text-primary" />
                 Agent Login
+                <ArrowRight size={16} className="ml-2 text-muted-foreground" />
               </Button>
             </Link>
             <Link href="/auth/agent-register">
-              <Button size="lg" variant="ghost" className="px-8 h-11 text-base hover:bg-secondary/50">
+              <Button size="lg" variant="outline" className="px-6 h-12 text-base rounded-xl border-2 hover:bg-secondary/50">
+                <UserPlus size={18} className="mr-2 text-primary" />
                 Register as Agent
+                <ArrowRight size={16} className="ml-2 text-muted-foreground" />
               </Button>
             </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Bar */}
-      <section className="relative py-12 border-y border-border/50 bg-card/50 backdrop-blur-sm">
-        <div className="container mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((stat, i) => (
-              <div key={stat.label} className="text-center animate-fade-in" style={{ animationDelay: `${0.1 * i}s` }}>
-                <AnimatedCounter value={stat.value} />
-                <p className="text-sm text-muted-foreground mt-1">{stat.label}</p>
-              </div>
-            ))}
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="relative py-20 sm:py-28">
+      <section className="relative py-16 sm:py-20">
         <div className="container mx-auto px-4 sm:px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">Everything You Need</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">
-              A complete platform to manage commissions, payroll, and staff — all in one place.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {features.map((feature, i) => (
               <div
                 key={feature.title}
@@ -282,100 +248,54 @@ export default function Home() {
                   <feature.icon size={24} className={feature.color} />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed mb-4">{feature.description}</p>
+                <button className={`text-sm font-medium flex items-center gap-1 transition-colors ${feature.linkColor}`}>
+                  Learn more <ArrowRight size={14} />
+                </button>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="relative py-20 sm:py-28 bg-secondary/30">
+      {/* Stats Bar */}
+      <section className="relative py-12 border-y border-border/50 bg-card/30">
         <div className="container mx-auto px-4 sm:px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">How It Works</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">
-              Get started in three simple steps. No complex setup required.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto relative">
-            {/* Connecting line (desktop only) */}
-            <div className="hidden md:block absolute top-16 left-[20%] right-[20%] h-0.5 bg-gradient-to-r from-primary/30 via-primary to-primary/30" />
-
-            {steps.map((step, i) => (
-              <div key={step.title} className="text-center relative animate-card-enter" style={{ animationDelay: `${0.2 * i}s` }}>
-                <div className="w-16 h-16 rounded-2xl bg-primary/10 border-2 border-primary/20 flex items-center justify-center mx-auto mb-6 relative z-10 bg-card">
-                  <step.icon size={28} className="text-primary" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
+            {stats.map((stat, i) => (
+              <div key={stat.label} className="flex items-center gap-4 animate-fade-in" style={{ animationDelay: `${0.1 * i}s` }}>
+                <div className={`w-12 h-12 rounded-xl ${stat.bg} flex items-center justify-center flex-shrink-0`}>
+                  <stat.icon size={22} className={stat.color} />
                 </div>
-                <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold mb-4">
-                  {i + 1}
+                <div>
+                  <AnimatedCounter value={stat.value} />
+                  <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">{step.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">{step.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="relative py-20 sm:py-28">
+      {/* Footer Trust Bar */}
+      <footer className="relative border-t border-border py-6">
         <div className="container mx-auto px-4 sm:px-6">
-          <div className="max-w-3xl mx-auto text-center bg-card border border-border rounded-3xl p-8 sm:p-12 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-violet-500/5 pointer-events-none" />
-            <div className="relative z-10">
-              <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-                Ready to Streamline Your Business?
-              </h2>
-              <p className="text-muted-foreground mb-8 max-w-lg mx-auto">
-                Join hundreds of shop owners who have simplified their commission and payroll management.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link href="/auth/shop-register">
-                  <Button size="lg" className="btn-gradient px-8 h-12 text-base font-semibold">
-                    Get Started Free
-                    <ArrowRight size={18} className="ml-2" />
-                  </Button>
-                </Link>
-                <Link href="/auth/shop-login">
-                  <Button size="lg" variant="outline" className="px-8 h-12 text-base border-2">
-                    Already Have an Account?
-                  </Button>
-                </Link>
-              </div>
-              <div className="flex items-center justify-center gap-6 mt-8 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 size={14} className="text-emerald-500" /> Free to start
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 size={14} className="text-emerald-500" /> No credit card
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 size={14} className="text-emerald-500" /> Cancel anytime
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="relative border-t border-border py-8">
-        <div className="container mx-auto px-4 sm:px-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-4xl mx-auto">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-                <Sparkles size={12} className="text-primary-foreground" />
-              </div>
-              <span className="font-semibold text-sm text-foreground">PayPro</span>
+              <ShieldCheck size={18} className="text-primary" />
+              <span className="text-sm font-semibold text-foreground">
+                Secure <span className="text-muted-foreground mx-1">•</span>{" "}
+                Reliable <span className="text-muted-foreground mx-1">•</span>{" "}
+                Scalable
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Multi-tenant platform with complete data isolation. Secure authentication.
+            <p className="text-xs text-muted-foreground text-center">
+              Multi-tenant platform with complete data isolation. Each shop's data is completely isolated with secure authentication.
             </p>
-            <p className="text-xs text-muted-foreground">
-              &copy; {new Date().getFullYear()} PayPro. All rights reserved.
-            </p>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Lock size={12} />
+              SSL Secured
+            </div>
           </div>
         </div>
       </footer>
