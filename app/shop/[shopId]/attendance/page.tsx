@@ -14,8 +14,6 @@ interface StaffAttendance {
   staff_name: string
   status: "present" | "absent" | "half"
   work_hours: number
-  
-  notes: string
 }
 
 export default function ShopAttendancePage() {
@@ -34,7 +32,6 @@ export default function ShopAttendancePage() {
   const fetchAttendance = async () => {
     setLoading(true)
     try {
-      // Get all staff
       const { data: staffData, error: staffError } = await supabase
         .from("staff")
         .select("id, name, salary_type")
@@ -42,7 +39,6 @@ export default function ShopAttendancePage() {
 
       if (staffError) throw staffError
 
-      // Get attendance for selected date
       const { data: attendanceData } = await supabase
         .from("attendance")
         .select("*")
@@ -61,8 +57,6 @@ export default function ShopAttendancePage() {
           staff_name: s.name,
           status: att?.status || "present",
           work_hours: att?.work_hours || (s.salary_type === "hourly" ? 8 : 1),
-          log_type: att?.log_type || "Entry",
-          
         }
       })
 
@@ -83,11 +77,8 @@ export default function ShopAttendancePage() {
         attendance_date: date,
         status: s.status,
         work_hours: s.work_hours,
-        
-        
       }))
 
-      // Upsert attendance records
       const { error } = await supabase
         .from("attendance")
         .upsert(records, { onConflict: "shop_id,staff_id,attendance_date" })
@@ -140,12 +131,6 @@ export default function ShopAttendancePage() {
                     value={s.work_hours}
                     onChange={(e) => updateStaff(s.staff_id, "work_hours", Number(e.target.value))}
                     className="w-24"
-                  />
-                  <Input
-                    placeholder="Notes"
-                    value={s.notes}
-                    onChange={(e) => updateStaff(s.staff_id, "notes", e.target.value)}
-                    className="flex-1 min-w-[150px]"
                   />
                 </div>
               </Card>
