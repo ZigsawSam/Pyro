@@ -7,7 +7,7 @@ import { createShopClient } from "@/lib/supabase/shop-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
-import { Loader2, Mail, Lock, Eye, EyeOff, Store, User, BarChart3, Users, DollarSign, Sparkles, CheckCircle2, Phone } from "lucide-react"
+import { Loader2, Mail, Lock, Eye, EyeOff, Store, User, BarChart3, Users, DollarSign, Sparkles, Phone } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -71,9 +71,9 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
     try {
-      // Agents login with phone number as email: phone@pyro.local + password
-      // Or if no password set, use phone number as both email and password
-      const agentEmail = `${phone}@pyro.local`
+      // Agent email format from DB: phone@agent.local
+      const agentEmail = `${phone}@agent.local`
+      // If no password provided, use phone number as password
       const agentPassword = password || phone
 
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -82,29 +82,15 @@ export default function LoginPage() {
       })
 
       if (authError || !authData.user) {
-        // If login fails, try to find agent by phone and check if registered
-        const { data: agent, error: agentError } = await supabase
-          .from("agents")
-          .select("id, name, phone_number, user_id")
-          .eq("phone_number", phone)
-          .single()
-
-        if (agentError || !agent) {
-          setError("Agent not found. Please register.")
-          setLoading(false)
-          return
-        }
-
-        // Agent exists but password wrong
-        setError("Invalid password. Please try again.")
+        setError(authError?.message || "Invalid credentials")
         setLoading(false)
         return
       }
 
-      // Verify agent exists in agents table
+      // Verify agent exists in agents table by user_id
       const { data: agent, error: agentError } = await supabase
         .from("agents")
-        .select("id, name, phone_number")
+        .select("id, name, phone_number, user_id")
         .eq("user_id", authData.user.id)
         .single()
 
