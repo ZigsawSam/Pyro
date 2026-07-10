@@ -44,6 +44,8 @@ export default function ShopStaffPage() {
     role: "",
     salary_type: "monthly",
     base_salary: "",
+    working_hours_per_day: "8",
+    overtime_rate: "0",
   })
 
   useEffect(() => {
@@ -118,7 +120,7 @@ export default function ShopStaffPage() {
 
       if (error) throw error
 
-      setNewStaff({ name: "", phone: "", role: "", salary_type: "monthly", base_salary: "" })
+      setNewStaff({ name: "", phone: "", role: "", salary_type: "monthly", base_salary: "", working_hours_per_day: "8", overtime_rate: "0" })
       setShowAddForm(false)
       fetchStaff()
     } catch (e) {
@@ -158,6 +160,8 @@ export default function ShopStaffPage() {
               <option value="hourly">Hourly</option>
             </select>
             <Input type="number" placeholder="Base Salary" value={newStaff.base_salary} onChange={(e) => setNewStaff({...newStaff, base_salary: e.target.value})} />
+            <Input type="number" placeholder="Working Hours/Day" value={newStaff.working_hours_per_day} onChange={(e) => setNewStaff({...newStaff, working_hours_per_day: e.target.value})} />
+            <Input type="number" placeholder="Overtime Rate (₹/hr)" value={newStaff.overtime_rate} onChange={(e) => setNewStaff({...newStaff, overtime_rate: e.target.value})} />
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setShowAddForm(false)}>Cancel</Button>

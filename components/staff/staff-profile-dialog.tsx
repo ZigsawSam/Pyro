@@ -28,6 +28,8 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
     role: "",
     salary_type: "monthly",
     base_salary: "",
+    working_hours_per_day: "8",
+    overtime_rate: "0",
     description: "",
     account_name: "",
     account_number: "",
@@ -44,6 +46,8 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
       role: staff.role || "",
       salary_type: staff.salary_type || "monthly",
       base_salary: staff.base_salary?.toString() || "",
+      working_hours_per_day: staff.working_hours_per_day?.toString() || "8",
+      overtime_rate: staff.overtime_rate?.toString() || "0",
       description: staff.description || "",
       account_name: staff.account_name || "",
       account_number: staff.account_number || "",
@@ -224,6 +228,8 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
                 <p><span className="font-medium">Role:</span> {staff.role}</p>
                 <p><span className="font-medium">Salary Type:</span> {staff.salary_type}</p>
                 <p><span className="font-medium">Base Salary:</span> ₹{Number(staff.base_salary || 0).toLocaleString()}</p>
+                <p><span className="font-medium">Working Hours/Day:</span> {staff.working_hours_per_day || 8} hrs</p>
+                <p><span className="font-medium">Overtime Rate:</span> ₹{staff.overtime_rate || 0}/hr</p>
                 <p><span className="font-medium">Amount to be paid today:</span> ₹{Number(staff.today_due || 0).toLocaleString()}</p>
                 <p><span className="font-medium">Today present days / hours:</span> {Number(staff.today_present_days || 0)} / {Number(staff.today_work_hours || 0)}h</p>
                 <p><span className="font-medium">Pending Payroll:</span> ₹{pending.toLocaleString()}</p>

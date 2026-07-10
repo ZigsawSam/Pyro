@@ -34,7 +34,7 @@ export default function ShopAttendancePage() {
     try {
       const { data: staffData, error: staffError } = await supabase
         .from("staff")
-        .select("id, name, salary_type")
+        .select("id, name, salary_type, working_hours_per_day")
         .eq("shop_id", shopId)
 
       if (staffError) throw staffError
