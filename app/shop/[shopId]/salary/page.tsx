@@ -34,7 +34,6 @@ export default function ShopSalaryPage() {
   })
   const [salaryRecords, setSalaryRecords] = useState<SalaryRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [generating, setGenerating] = useState(false)
 
   useEffect(() => {
     fetchSalaryData()
@@ -110,7 +109,6 @@ export default function ShopSalaryPage() {
         const workHours = att.hours
         const overtimeHours = att.overtime_hours
         const advances = advancesByStaff[s.id] || 0
-        const workingHoursPerDay = Number(s.working_hours_per_day) || 8
         const overtimeRate = Number(s.overtime_rate) || 0
 
         let finalPayable = 0
@@ -151,7 +149,7 @@ export default function ShopSalaryPage() {
 
       setSalaryRecords(records)
 
-      // Auto-save salary records to database
+      // Auto-save salary records to database so they have IDs for payment
       if (records.length > 0) {
         const upsertData = records.map((r) => ({
           shop_id: shopId,
@@ -164,9 +162,18 @@ export default function ShopSalaryPage() {
           status: r.status,
         }))
 
-        await supabase.from("salary").upsert(upsertData, {
+        const { data: upserted } = await supabase.from("salary").upsert(upsertData, {
           onConflict: "shop_id,staff_id,month",
-        })
+        }).select()
+
+        // Update records with IDs from database
+        if (upserted) {
+          const idMap = upserted.reduce((acc: any, s: any) => {
+            acc[s.staff_id] = s.id
+            return acc
+          }, {})
+          setSalaryRecords(prev => prev.map(r => ({...r, id: idMap[r.staff_id] || r.id})))
+        }
       }
     } catch (e) {
       console.error("Salary fetch error:", e)
@@ -177,15 +184,21 @@ export default function ShopSalaryPage() {
 
   const handlePay = async (record: SalaryRecord) => {
     try {
-      const { error } = await supabase
+      if (!record.id) {
+        alert("Salary record not saved yet. Please wait a moment and try again.")
+        return
+      }
+
+      // Update salary status to paid
+      const { error: salaryError } = await supabase
         .from("salary")
         .update({ status: "paid", paid_at: new Date().toISOString() })
         .eq("id", record.id)
 
-      if (error) throw error
+      if (salaryError) throw salaryError
 
-      // Also create a payout record
-      await supabase.from("payouts").insert({
+      // Create payout record
+      const { error: payoutError } = await supabase.from("payouts").insert({
         shop_id: shopId,
         staff_id: record.staff_id,
         person_type: "staff",
@@ -194,11 +207,13 @@ export default function ShopSalaryPage() {
         notes: `Salary for ${month}`,
       })
 
+      if (payoutError) throw payoutError
+
       await fetchSalaryData()
       alert("Salary marked as paid!")
-    } catch (e) {
-      console.error(e)
-      alert("Failed to process payment")
+    } catch (e: any) {
+      console.error("Payment error:", e)
+      alert("Failed to process payment: " + (e.message || "Unknown error"))
     }
   }
 

@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card"
 import { Loader2, Plus, Search, Phone, UserCircle } from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
+import { StaffProfileDialog } from "@/components/staff/staff-profile-dialog"
 
 interface StaffMember {
   id: number
@@ -36,6 +37,8 @@ export default function ShopStaffPage() {
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null)
+  const [showProfile, setShowProfile] = useState(false)
   const [attendanceSummary, setAttendanceSummary] = useState<Record<number, AttendanceSummary>>({})
 
   useEffect(() => {
@@ -45,7 +48,6 @@ export default function ShopStaffPage() {
   const fetchStaff = async () => {
     setLoading(true)
     try {
-      // Fetch staff
       const { data: staffData, error: staffError } = await supabase
         .from("staff")
         .select("id, name, phone, role, salary_type, base_salary, working_hours_per_day, overtime_rate, is_active")
@@ -55,7 +57,6 @@ export default function ShopStaffPage() {
       if (staffError) throw staffError
       setStaff(staffData || [])
 
-      // Fetch attendance for current month
       const now = new Date()
       const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
       const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`
@@ -67,7 +68,6 @@ export default function ShopStaffPage() {
         .gte("attendance_date", monthStart)
         .lte("attendance_date", monthEnd)
 
-      // Calculate attendance summary per staff
       const summary: Record<number, AttendanceSummary> = {}
       ;(attendanceData || []).forEach((a: any) => {
         if (!summary[a.staff_id]) {
@@ -119,11 +119,21 @@ export default function ShopStaffPage() {
       s.phone.includes(searchQuery)
   )
 
+  const handleProfileClick = (member: StaffMember) => {
+    setSelectedStaff(member)
+    setShowProfile(true)
+  }
+
+  const handleAddStaff = () => {
+    setSelectedStaff(null)
+    setShowProfile(true)
+  }
+
   return (
     <MainLayout title="Staff" shopId={shopId}>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Staff</h1>
-        <Button onClick={() => window.location.href = `/shop/${shopId}/staff/add`}>
+        <Button onClick={handleAddStaff}>
           <Plus className="mr-2 h-4 w-4" /> Add Staff
         </Button>
       </div>
@@ -174,7 +184,7 @@ export default function ShopStaffPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <Button variant="outline" size="sm" onClick={() => window.location.href = `/shop/${shopId}/staff/${member.id}`}>
+                  <Button variant="outline" size="sm" onClick={() => handleProfileClick(member)}>
                     Profile
                   </Button>
                   <Button size="sm" onClick={() => window.location.href = `/shop/${shopId}/salary`}>
@@ -189,6 +199,21 @@ export default function ShopStaffPage() {
           )}
         </div>
       )}
+
+      <StaffProfileDialog
+        open={showProfile}
+        onOpenChange={setShowProfile}
+        shopId={shopId}
+        staff={selectedStaff}
+        onUpdated={() => {
+          setShowProfile(false)
+          fetchStaff()
+        }}
+        onDeleted={() => {
+          setShowProfile(false)
+          fetchStaff()
+        }}
+      />
     </MainLayout>
   )
 }
