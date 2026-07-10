@@ -86,7 +86,7 @@ export default function AgentLoginPage() {
         return
       }
 
-      router.push("/agent/dashboard")
+      window.location.href = "/agent/dashboard"
     } catch (err) {
       console.error("Login exception:", err)
       setError("An unexpected error occurred. Check console.")
