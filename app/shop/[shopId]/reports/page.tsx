@@ -26,7 +26,7 @@ export default function ShopReportsPage() {
 
       const [{ data: salesData }, { data: payoutsData }, { data: salaryData }] = await Promise.all([
         supabase.from("sales").select("amount, commission_amount, sale_date").eq("shop_id", shopId).gte("sale_date", from).lte("sale_date", to),
-        supabase.from("payouts").select("amount_paid, person_type, is_advance").eq("shop_id", shopId).gte("payment_date", from).lte("payment_date", to),
+        supabase.from("payouts").select("amount_paid, person_type").eq("shop_id", shopId).gte("payment_date", from).lte("payment_date", to),
         supabase.from("salary").select("final_payable, status").eq("shop_id", shopId).eq("month", from.slice(0, 7)),
       ])
 
@@ -35,7 +35,7 @@ export default function ShopReportsPage() {
       const totalPayouts = (payoutsData || []).reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
       const agentPayouts = (payoutsData || []).filter((p) => p.person_type === "agent").reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
       const staffPayouts = (payoutsData || []).filter((p) => p.person_type === "staff").reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
-      const advances = (payoutsData || []).filter((p) => p.is_advance).reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
+      const advances = (payoutsData || []).filter((p) => false).reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
       const totalSalary = (salaryData || []).reduce((sum, s) => sum + Number(s.final_payable || 0), 0)
       const paidSalary = (salaryData || []).filter((s) => s.status === "paid").reduce((sum, s) => sum + Number(s.final_payable || 0), 0)
 

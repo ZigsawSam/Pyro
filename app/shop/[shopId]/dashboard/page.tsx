@@ -39,7 +39,7 @@ export default function ShopDashboardPage() {
         supabase.from("staff").select("*", { count: "exact", head: true }).eq("shop_id", shopId),
         supabase.from("sales").select("amount").eq("shop_id", shopId).eq("sale_date", today),
         supabase.from("sales").select("amount").eq("shop_id", shopId).gte("sale_date", monthStart),
-        supabase.from("payouts").select("amount_paid").eq("shop_id", shopId).eq("is_advance", false),
+        supabase.from("payouts").select("amount_paid").eq("shop_id", shopId),
         supabase.from("salary").select("final_payable").eq("shop_id", shopId).eq("status", "pending"),
       ])
 

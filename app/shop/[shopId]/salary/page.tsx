@@ -99,7 +99,7 @@ export default function ShopSalaryPage() {
         .select("person_id, amount_paid")
         .eq("shop_id", shopId)
         .eq("person_type", "staff")
-        .eq("is_advance", true)
+        
         .gte("payment_date", monthStart)
         .lte("payment_date", monthEnd)
 

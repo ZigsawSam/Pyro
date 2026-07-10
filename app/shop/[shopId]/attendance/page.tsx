@@ -14,7 +14,7 @@ interface StaffAttendance {
   staff_name: string
   status: "present" | "absent" | "half"
   work_hours: number
-  log_type: string
+  
   notes: string
 }
 
@@ -83,14 +83,14 @@ export default function ShopAttendancePage() {
         attendance_date: date,
         status: s.status,
         work_hours: s.work_hours,
-        log_type: s.log_type,
+        
         notes: s.notes,
       }))
 
       // Upsert attendance records
       const { error } = await supabase
         .from("attendance")
-        .upsert(records, { onConflict: "shop_id,staff_id,attendance_date,log_type" })
+        .upsert(records, { onConflict: "shop_id,staff_id,attendance_date" })
 
       if (error) throw error
       alert("Attendance saved!")
