@@ -62,7 +62,7 @@ export default function ShopAttendancePage() {
           status: att?.status || "present",
           work_hours: att?.work_hours || (s.salary_type === "hourly" ? 8 : 1),
           log_type: att?.log_type || "Entry",
-          notes: att?.notes || "",
+          
         }
       })
 
@@ -84,7 +84,7 @@ export default function ShopAttendancePage() {
         status: s.status,
         work_hours: s.work_hours,
         
-        notes: s.notes,
+        
       }))
 
       // Upsert attendance records
