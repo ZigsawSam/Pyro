@@ -2,22 +2,34 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Bell, User, LogOut, Settings, Check, X, Clock, Info, Briefcase, UserCircle, ChevronDown, Calendar } from "lucide-react"
+import {
+  Bell,
+  ChevronDown,
+  LogOut,
+  Settings,
+  User,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Store,
+  Wallet,
+  Briefcase,
+  X,
+  Calendar,
+  UserCircle,
+} from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
 
-interface HeaderProps {
+interface ShopHeaderProps {
   title: string
   subtitle?: string
   shopName?: string
   shopId?: number
-  isAgent?: boolean
-  agentName?: string
-  agentId?: number
 }
 
 interface Notification {
   id: string
-  type: "request" | "update"
+  type: "request" | "approval" | "payment" | "update"
   title: string
   message: string
   date: string
@@ -25,13 +37,13 @@ interface Notification {
   requestId?: number
 }
 
-export function Header({ title, subtitle, shopName, shopId, isAgent = false, agentName, agentId }: HeaderProps) {
+export function ShopHeader({ title, subtitle, shopName, shopId }: ShopHeaderProps) {
   const router = useRouter()
   const supabase = createShopClient()
   const [showNotifications, setShowNotifications] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [userData, setUserData] = useState<{ name: string; email: string; role: string } | null>(null)
+  const [userData, setUserData] = useState<{ name: string; email: string } | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const notifRef = useRef<HTMLDivElement>(null)
   const profileRef = useRef<HTMLDivElement>(null)
@@ -42,43 +54,30 @@ export function Header({ title, subtitle, shopName, shopId, isAgent = false, age
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setUserData({
-          name: agentName || user.user_metadata?.name || user.email?.split("@")[0] || "User",
+          name: shopName || user.user_metadata?.name || user.email?.split("@")[0] || "Owner",
           email: user.email || "",
-          role: isAgent ? "Agent" : "Shop Owner",
         })
       }
     }
     fetchUser()
-  }, [supabase, isAgent, agentName])
+  }, [supabase, shopName])
 
-  // Fetch notifications
+  // Fetch shop notifications
   useEffect(() => {
     const fetchNotifications = async () => {
-      if (!shopId || isAgent) {
-        setNotifications([
-          {
-            id: "update-1",
-            type: "update",
-            title: "New Feature: Attendance Logging",
-            message: "You can now log daily attendance for all staff members.",
-            date: "7/10/2026",
-            read: false,
-          },
-          {
-            id: "update-2",
-            type: "update",
-            title: "Payroll Auto-Calculation",
-            message: "Staff salary is now calculated automatically from attendance records.",
-            date: "7/9/2026",
-            read: false,
-          },
-        ])
-        return
-      }
+      if (!shopId) return
 
       const [{ data: agentRequests }, { data: linkRequests }] = await Promise.all([
-        supabase.from("agent_requests").select("id, agent_name, status, created_at").eq("shop_id", shopId).eq("status", "pending"),
-        supabase.from("agent_link_requests").select("id, agent_name, status, created_at").eq("shop_id", shopId).eq("status", "pending"),
+        supabase
+          .from("agent_requests")
+          .select("id, agent_name, status, created_at")
+          .eq("shop_id", shopId)
+          .eq("status", "pending"),
+        supabase
+          .from("agent_link_requests")
+          .select("id, agent_name, status, created_at")
+          .eq("shop_id", shopId)
+          .eq("status", "pending"),
       ])
 
       const requestNotifications: Notification[] = [
@@ -102,32 +101,12 @@ export function Header({ title, subtitle, shopName, shopId, isAgent = false, age
         })),
       ]
 
-      const appUpdates: Notification[] = [
-        {
-          id: "update-1",
-          type: "update",
-          title: "New Feature: Attendance Logging",
-          message: "You can now log daily attendance for all staff members.",
-          date: "7/10/2026",
-          read: false,
-        },
-        {
-          id: "update-2",
-          type: "update",
-          title: "Payroll Auto-Calculation",
-          message: "Staff salary is now calculated automatically from attendance records.",
-          date: "7/9/2026",
-          read: false,
-        },
-      ]
-
-      const all = [...requestNotifications, ...appUpdates]
-      setNotifications(all)
-      setUnreadCount(all.filter((n) => !n.read).length)
+      setNotifications(requestNotifications)
+      setUnreadCount(requestNotifications.filter((n) => !n.read).length)
     }
 
     fetchNotifications()
-  }, [shopId, isAgent, supabase])
+  }, [shopId, supabase])
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -171,10 +150,30 @@ export function Header({ title, subtitle, shopName, shopId, isAgent = false, age
     router.push("/auth/login")
   }
 
-  // Format date range like reference
+  const getIcon = (type: string) => {
+    switch (type) {
+      case "request":
+        return { icon: Briefcase, color: "text-blue-500", bg: "bg-blue-50" }
+      case "approval":
+        return { icon: CheckCircle, color: "text-emerald-500", bg: "bg-emerald-50" }
+      case "payment":
+        return { icon: Wallet, color: "text-green-500", bg: "bg-green-50" }
+      default:
+        return { icon: Clock, color: "text-amber-500", bg: "bg-amber-50" }
+    }
+  }
+
   const today = new Date()
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
   const dateRange = `${startOfMonth.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${today.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+
+  const displayName = shopName || userData?.name || "Shop Owner"
+  const initials = displayName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-slate-200">
@@ -182,9 +181,13 @@ export function Header({ title, subtitle, shopName, shopId, isAgent = false, age
         {/* Left: Title + Welcome */}
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Welcome back, {agentName || userData?.name || "User"}! 👋
-          </p>
+          {subtitle ? (
+            <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>
+          ) : (
+            <p className="text-sm text-slate-500 mt-0.5">
+              Welcome back, {displayName}! 👋
+            </p>
+          )}
         </div>
 
         {/* Right: Notifications + Date + User */}
@@ -206,7 +209,7 @@ export function Header({ title, subtitle, shopName, shopId, isAgent = false, age
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-xl shadow-2xl animate-scale-in z-[9999]">
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-xl shadow-2xl z-[9999]">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
                   <h3 className="font-semibold text-sm">Notifications</h3>
                   {unreadCount > 0 && (
@@ -214,58 +217,61 @@ export function Header({ title, subtitle, shopName, shopId, isAgent = false, age
                       onClick={markAllRead}
                       className="text-xs text-blue-600 hover:underline flex items-center gap-1"
                     >
-                      <Check size={12} /> Mark all read
+                      <CheckCircle size={12} /> Mark all read
                     </button>
                   )}
                 </div>
                 <div className="max-h-80 overflow-y-auto">
                   {notifications.length === 0 ? (
                     <div className="px-4 py-8 text-center text-sm text-slate-400">
-                      <Info size={24} className="mx-auto mb-2 text-slate-300" />
+                      <Clock size={24} className="mx-auto mb-2 text-slate-300" />
                       No notifications
                     </div>
                   ) : (
-                    notifications.map((n) => (
-                      <div
-                        key={n.id}
-                        className={`px-4 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors ${
-                          !n.read ? "bg-blue-50/50" : ""
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`mt-0.5 p-1.5 rounded-lg ${n.type === "request" ? "bg-blue-100 text-blue-600" : "bg-amber-100 text-amber-600"}`}>
-                            {n.type === "request" ? <Briefcase size={14} /> : <Clock size={14} />}
+                    notifications.map((n) => {
+                      const { icon: Icon, color, bg } = getIcon(n.type)
+                      return (
+                        <div
+                          key={n.id}
+                          className={`px-4 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors ${
+                            !n.read ? "bg-blue-50/50" : ""
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`mt-0.5 p-1.5 rounded-lg ${bg} ${color}`}>
+                              <Icon size={14} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium">{n.title}</p>
+                              <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>
+                              <p className="text-xs text-slate-400 mt-1">{n.date}</p>
+                              {n.type === "request" && n.requestId && (
+                                <div className="flex gap-2 mt-2">
+                                  <button
+                                    onClick={() => handleAcceptRequest(n.requestId!, "agent_requests")}
+                                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectRequest(n.requestId!, "agent_requests")}
+                                    className="text-xs px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => dismissNotification(n.id)}
+                              className="text-slate-300 hover:text-slate-500 transition-colors p-0.5"
+                            >
+                              <X size={14} />
+                            </button>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium">{n.title}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>
-                            <p className="text-xs text-slate-400 mt-1">{n.date}</p>
-                            {n.type === "request" && n.requestId && (
-                              <div className="flex gap-2 mt-2">
-                                <button
-                                  onClick={() => handleAcceptRequest(n.requestId!, "agent_requests")}
-                                  className="text-xs px-2 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                                >
-                                  Accept
-                                </button>
-                                <button
-                                  onClick={() => handleRejectRequest(n.requestId!, "agent_requests")}
-                                  className="text-xs px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => dismissNotification(n.id)}
-                            className="text-slate-300 hover:text-slate-500 transition-colors p-0.5"
-                          >
-                            <X size={14} />
-                          </button>
                         </div>
-                      </div>
-                    ))
+                      )
+                    })
                   )}
                 </div>
               </div>
@@ -288,32 +294,28 @@ export function Header({ title, subtitle, shopName, shopId, isAgent = false, age
               className="flex items-center gap-3 hover:bg-slate-50 rounded-xl p-1.5 pr-3 transition-all duration-200"
               aria-label="Profile menu"
             >
-              <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-sm">
-                {agentName
-                  ? agentName.split(" ").map((n) => n[0]).join("").toUpperCase()
-                  : userData?.name?.charAt(0)?.toUpperCase() || "U"}
+              <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-semibold text-sm">
+                {initials}
               </div>
               <div className="hidden lg:block text-left">
-                <p className="text-sm font-semibold text-slate-900">{agentName || userData?.name || "User"}</p>
-                <p className="text-xs text-slate-500">Agent ID: AGT-{agentId?.toString().padStart(4, "0") || "0000"}</p>
+                <p className="text-sm font-semibold text-slate-900">{displayName}</p>
+                <p className="text-xs text-slate-500">Shop Owner</p>
               </div>
               <ChevronDown size={14} className="text-slate-400 hidden lg:block" />
             </button>
 
             {showProfile && (
-              <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-2xl animate-scale-in z-[9999]">
+              <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-2xl z-[9999]">
                 <div className="px-4 py-3 border-b border-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                      {agentName
-                        ? agentName.split(" ").map((n) => n[0]).join("").toUpperCase()
-                        : userData?.name?.charAt(0)?.toUpperCase() || "U"}
+                    <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
+                      {initials}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">{agentName || userData?.name || "User"}</p>
+                      <p className="text-sm font-semibold truncate">{displayName}</p>
                       <p className="text-xs text-slate-500 truncate">{userData?.email || ""}</p>
                       <span className="inline-flex items-center gap-1 mt-1 text-xs px-2 py-0.5 bg-slate-100 rounded-full text-slate-600">
-                        <UserCircle size={10} /> {userData?.role || "User"}
+                        <UserCircle size={10} /> Shop Owner
                       </span>
                     </div>
                   </div>
@@ -326,15 +328,14 @@ export function Header({ title, subtitle, shopName, shopId, isAgent = false, age
                     }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-left"
                   >
-                    <Settings size={16} className="text-slate-400" />
-                    Settings
+                    <Settings size={16} className="text-slate-400" /> Settings
                   </button>
+                  <div className="border-t border-slate-100 mx-3 my-1" />
                   <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-red-50 text-red-500 transition-colors text-left"
                   >
-                    <LogOut size={16} />
-                    Logout
+                    <LogOut size={16} /> Logout
                   </button>
                 </div>
               </div>

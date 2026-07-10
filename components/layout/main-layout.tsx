@@ -1,8 +1,10 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { Sidebar } from "./sidebar"
-import { Header } from "./header"
+import { AgentSidebar } from "./AgentSidebar"
+import { AgentHeader } from "./AgentHeader"
+import { ShopSidebar } from "./ShopSidebar"
+import { ShopHeader } from "./ShopHeader"
 
 interface MainLayoutProps {
   children: ReactNode
@@ -25,19 +27,25 @@ export function MainLayout({
   userName,
   agentId,
 }: MainLayoutProps) {
+  if (isAgent) {
+    return (
+      <div className="flex min-h-screen bg-[#f8fafc]">
+        <AgentSidebar userName={userName} agentId={agentId} />
+        <main className="flex-1 flex flex-col overflow-hidden lg:ml-[240px]">
+          <AgentHeader title={title} subtitle={subtitle} agentName={userName} agentId={agentId} />
+          <div className="flex-1 overflow-auto">
+            <div className="p-6 animate-fade-in">{children}</div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-screen bg-[#f8fafc]">
-      <Sidebar shopId={shopId} isAgent={isAgent} userName={userName} />
+      <ShopSidebar shopName={shopName} shopId={shopId} />
       <main className="flex-1 flex flex-col overflow-hidden lg:ml-[240px]">
-        <Header
-          title={title}
-          subtitle={subtitle}
-          shopName={shopName}
-          shopId={shopId}
-          isAgent={isAgent}
-          agentName={userName}
-          agentId={agentId}
-        />
+        <ShopHeader title={title} subtitle={subtitle} shopName={shopName} shopId={shopId} />
         <div className="flex-1 overflow-auto">
           <div className="p-6 animate-fade-in">{children}</div>
         </div>

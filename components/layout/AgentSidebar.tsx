@@ -9,18 +9,16 @@ import {
   Wallet,
   TrendingUp,
   FileText,
-  Bell,
-  Settings,
-  LogOut,
   ChevronDown,
   ChevronRight,
+  LogOut,
   User,
+  Settings,
 } from "lucide-react"
 
-interface SidebarProps {
-  shopId?: number
-  isAgent?: boolean
+interface AgentSidebarProps {
   userName?: string
+  agentId?: number
 }
 
 const navSections = [
@@ -54,18 +52,12 @@ const navSections = [
       { label: "Reports", icon: FileText, href: "/agent/reports" },
     ],
   },
-  {
-    title: "ACCOUNT",
-    items: [
-      { label: "Notifications", icon: Bell, href: "/agent/notifications", badge: 3 },
-      { label: "Settings", icon: Settings, href: "/agent/settings" },
-    ],
-  },
 ]
 
-export function Sidebar({ isAgent = false, userName = "Agent" }: SidebarProps) {
+export function AgentSidebar({ userName = "Agent", agentId }: AgentSidebarProps) {
   const pathname = usePathname()
   const [expanded, setExpanded] = useState<string | null>("Earnings")
+  const [showUserMenu, setShowUserMenu] = useState(false)
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/")
 
@@ -75,6 +67,11 @@ export function Sidebar({ isAgent = false, userName = "Agent" }: SidebarProps) {
     .join("")
     .toUpperCase()
     .slice(0, 2)
+
+  const handleLogout = () => {
+    // Trigger logout via parent or redirect
+    window.location.href = "/auth/logout"
+  }
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-[240px] bg-[#0f172a] text-white flex flex-col z-50">
@@ -120,11 +117,6 @@ export function Sidebar({ isAgent = false, userName = "Agent" }: SidebarProps) {
                     >
                       <item.icon size={18} />
                       <span className="flex-1">{item.label}</span>
-                      {item.badge && (
-                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                          {item.badge}
-                        </span>
-                      )}
                       {hasChildren && (
                         <span className="text-slate-400">
                           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -161,40 +153,50 @@ export function Sidebar({ isAgent = false, userName = "Agent" }: SidebarProps) {
         ))}
       </nav>
 
-      {/* Divider */}
-      <div className="mx-3 border-t border-slate-700" />
-
-      {/* Profile */}
-      <div className="p-3">
-        <Link
-          href="/agent/profile"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors mb-1 ${
-            pathname === "/agent/profile"
-              ? "bg-blue-600 text-white font-medium"
-              : "text-slate-300 hover:bg-slate-800 hover:text-white"
-          }`}
+      {/* User Card with Dropdown */}
+      <div className="p-3 relative">
+        <button
+          onClick={() => setShowUserMenu(!showUserMenu)}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors"
         >
-          <User size={18} />
-          <span className="flex-1">Profile</span>
-        </Link>
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-          <LogOut size={18} />
-          <span className="flex-1 text-left">Logout</span>
-        </button>
-      </div>
-
-      {/* User Card */}
-      <div className="p-3">
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-800/50">
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold">
             {initials}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 text-left">
             <p className="text-sm font-medium truncate">{userName}</p>
-            <p className="text-[11px] text-slate-400">Agent</p>
+            <p className="text-[11px] text-slate-400">Agent ID: AGT-{String(agentId || 0).padStart(4, "0")}</p>
           </div>
-          <ChevronDown size={14} className="text-slate-400" />
-        </div>
+          <ChevronDown size={14} className={`text-slate-400 transition-transform ${showUserMenu ? "rotate-180" : ""}`} />
+        </button>
+
+        {showUserMenu && (
+          <div className="absolute bottom-full left-3 right-3 mb-2 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+            <Link
+              href="/agent/profile"
+              className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+              onClick={() => setShowUserMenu(false)}
+            >
+              <User size={16} className="text-slate-400" />
+              Profile
+            </Link>
+            <Link
+              href="/agent/settings"
+              className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+              onClick={() => setShowUserMenu(false)}
+            >
+              <Settings size={16} className="text-slate-400" />
+              Settings
+            </Link>
+            <div className="border-t border-slate-100" />
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
+            >
+              <LogOut size={16} />
+              Logout
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   )
