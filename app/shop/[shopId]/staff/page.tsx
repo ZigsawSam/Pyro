@@ -113,6 +113,7 @@ export default function ShopStaffPage() {
         role: newStaff.role,
         salary_type: newStaff.salary_type,
         base_salary: Number(newStaff.base_salary),
+        join_date: new Date().toISOString().split("T")[0],
       })
 
       if (error) throw error
