@@ -19,10 +19,9 @@ interface SaleRecord {
   location: string
   amount: number
   commission_amount: number
-  commission_rate: number
   sale_date: string
-  status: "confirmed" | "pending" | "processing" | "rejected" | "approved"
-  payout_month?: string
+  notes?: string
+  status: "confirmed" | "pending" | "processing" | "rejected"
 }
 
 export default function CommissionDetailsPage() {
@@ -32,6 +31,7 @@ export default function CommissionDetailsPage() {
   const [agentName, setAgentName] = useState("")
   const [loading, setLoading] = useState(true)
   const [salesRecords, setSalesRecords] = useState<SaleRecord[]>([])
+  const [paidSaleIds, setPaidSaleIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -49,28 +49,59 @@ export default function CommissionDetailsPage() {
   const fetchData = async (id: number) => {
     setLoading(true)
     try {
-      const { data: sales } = await supabase
+      // Fetch sales with shop info
+      const { data: sales, error: salesError } = await supabase
         .from("sales")
-        .select(`id, shop_id, amount, commission_amount, commission_rate, sale_date, status, payout_month, shops:shop_id (shop_name, city, state)`)
+        .select(`id, shop_id, amount, commission_amount, sale_date, notes, shops:shop_id (shop_name, city, state)`)
         .eq("agent_id", id)
         .order("sale_date", { ascending: false })
 
-      const formatted = (sales || []).map((s: any) => ({
-        id: s.id,
-        shop_id: s.shop_id,
-        shop_name: s.shops?.shop_name || "Unknown Shop",
-        location: `${s.shops?.city || ""}${s.shops?.state ? `, ${s.shops?.state}` : ""}`,
-        amount: Number(s.amount || 0),
-        commission_amount: Number(s.commission_amount || 0),
-        commission_rate: Number(s.commission_rate || 0),
-        sale_date: s.sale_date,
-        status: (s.status || "pending") as SaleRecord["status"],
-        payout_month: s.payout_month,
-      }))
+      if (salesError) {
+        console.error("Sales query error:", salesError)
+      }
 
+      // Fetch payouts to determine which sales are paid
+      const { data: payouts } = await supabase
+        .from("payouts")
+        .select("sale_id, amount_paid, status")
+        .eq("agent_id", id)
+
+      // Build set of paid sale IDs
+      const paidIds = new Set<number>()
+      const processingIds = new Set<number>()
+      ;(payouts || []).forEach((p: any) => {
+        if (p.status === "paid" || p.amount_paid > 0) {
+          paidIds.add(p.sale_id)
+        } else if (p.status === "processing") {
+          processingIds.add(p.sale_id)
+        }
+      })
+
+      setPaidSaleIds(paidIds)
+
+      // Format records with derived status
+      const formatted = (sales || []).map((s: any) => {
+        let status: SaleRecord["status"] = "pending"
+        if (paidIds.has(s.id)) status = "confirmed"
+        else if (processingIds.has(s.id)) status = "processing"
+
+        return {
+          id: s.id,
+          shop_id: s.shop_id,
+          shop_name: s.shops?.shop_name || "Unknown Shop",
+          location: `${s.shops?.city || ""}${s.shops?.state ? `, ${s.shops?.state}` : ""}`,
+          amount: Number(s.amount || 0),
+          commission_amount: Number(s.commission_amount || 0),
+          sale_date: s.sale_date,
+          notes: s.notes,
+          status,
+        }
+      })
+
+      console.log("Fetched sales:", formatted.length)
       setSalesRecords(formatted)
     } catch (e) {
-      console.error(e)
+      console.error("fetchData error:", e)
     } finally {
       setLoading(false)
     }
@@ -79,7 +110,7 @@ export default function CommissionDetailsPage() {
   // Computed stats
   const stats = useMemo(() => {
     const total = salesRecords.reduce((sum, r) => sum + r.commission_amount, 0)
-    const confirmed = salesRecords.filter((r) => r.status === "confirmed" || r.status === "approved").reduce((sum, r) => sum + r.commission_amount, 0)
+    const confirmed = salesRecords.filter((r) => r.status === "confirmed").reduce((sum, r) => sum + r.commission_amount, 0)
     const pending = salesRecords.filter((r) => r.status === "pending").reduce((sum, r) => sum + r.commission_amount, 0)
     const processing = salesRecords.filter((r) => r.status === "processing").reduce((sum, r) => sum + r.commission_amount, 0)
     const rejected = salesRecords.filter((r) => r.status === "rejected").reduce((sum, r) => sum + r.commission_amount, 0)
@@ -135,9 +166,9 @@ export default function CommissionDetailsPage() {
       location: r.location,
       salesAmount: r.amount,
       commission: r.commission_amount,
-      rate: r.commission_rate,
+      rate: r.amount > 0 ? Math.round((r.commission_amount / r.amount) * 100) : 0,
       status: r.status,
-      payoutMonth: r.payout_month || new Date(r.sale_date).toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
+      payoutMonth: new Date(r.sale_date).toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
     }))
   }, [salesRecords])
 
