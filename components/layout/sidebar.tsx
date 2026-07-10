@@ -2,7 +2,20 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Users, Briefcase, BarChart3, LogOut, Menu, X, Clock, Wallet, FileText } from "lucide-react"
+import {
+  LayoutDashboard,
+  Store,
+  BarChart3,
+  Wallet,
+  TrendingUp,
+  FileText,
+  Bell,
+  LogOut,
+  Menu,
+  X,
+  ChevronDown,
+  Sparkles,
+} from "lucide-react"
 import { useState } from "react"
 
 interface SidebarProps {
@@ -14,24 +27,28 @@ interface SidebarProps {
 export function Sidebar({ shopId, isAgent = false, userName }: SidebarProps) {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+
+  const agentLinks = [
+    { href: "/agent/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/agent/shops", label: "My Shops", icon: Store },
+    { href: "/agent/commissions", label: "Commissions", icon: BarChart3 },
+    { href: "/agent/payouts", label: "Payouts", icon: Wallet },
+    { href: "/agent/performance", label: "Performance", icon: TrendingUp },
+    { href: "/agent/reports", label: "Reports", icon: FileText },
+    { href: "/agent/notifications", label: "Notifications", icon: Bell },
+  ]
 
   const shopLinks = shopId
     ? [
         { href: `/shop/${shopId}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
-        { href: `/shop/${shopId}/agents`, label: "Agents", icon: Users },
-        { href: `/shop/${shopId}/sales`, label: "Sales", icon: Briefcase },
-        { href: `/shop/${shopId}/staff`, label: "Staff & Payroll", icon: Users },
-        { href: `/shop/${shopId}/attendance`, label: "Attendance", icon: Clock },
+        { href: `/shop/${shopId}/agents`, label: "Agents", icon: Store },
+        { href: `/shop/${shopId}/sales`, label: "Sales", icon: BarChart3 },
+        { href: `/shop/${shopId}/staff`, label: "Staff & Payroll", icon: Wallet },
         { href: `/shop/${shopId}/payouts`, label: "Payouts", icon: Wallet },
         { href: `/shop/${shopId}/reports`, label: "Reports", icon: FileText },
       ]
     : []
-
-  const agentLinks = [
-    { href: "/agent/dashboard", label: "My Shops", icon: Briefcase },
-    { href: "/agent/commissions", label: "Commissions", icon: BarChart3 },
-    { href: "/agent/payouts", label: "Payouts", icon: Wallet },
-  ]
 
   const links = isAgent ? agentLinks : shopLinks
 
@@ -53,18 +70,25 @@ export function Sidebar({ shopId, isAgent = false, userName }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - Dark navy like reference */}
       <aside
-        className={`fixed left-0 top-0 bottom-0 w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-300 ease-out z-40 overflow-y-auto ${
+        className={`fixed left-0 top-0 bottom-0 w-[240px] bg-[#0f172a] text-white transform transition-transform duration-300 ease-out z-40 overflow-y-auto ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
-        <div className="p-6 border-b border-sidebar-border">
-          <h1 className="text-2xl font-bold text-sidebar-primary tracking-tight">PayPro</h1>
-          <p className="text-sm text-sidebar-foreground/60 mt-1">{isAgent ? "Agent Portal" : "Shop Dashboard"}</p>
+        {/* Logo */}
+        <div className="p-5 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+            <span className="text-lg font-bold text-white">P</span>
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-white tracking-tight">PayPro</h1>
+            <p className="text-xs text-slate-400">Agent Portal</p>
+          </div>
         </div>
 
-        <nav className="p-4">
+        {/* Nav */}
+        <nav className="px-3 py-2">
           {links.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href || pathname?.startsWith(href + "/")
             return (
@@ -72,33 +96,46 @@ export function Sidebar({ shopId, isAgent = false, userName }: SidebarProps) {
                 key={href}
                 href={href}
                 onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-1.5 transition-all duration-200 ${
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg mb-0.5 transition-all duration-200 ${
                   isActive
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/20"
-                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
                 }`}
               >
-                <Icon size={18} className={isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/60"} />
+                <Icon size={18} className={isActive ? "text-white" : "text-slate-400"} />
                 <span className="text-sm font-medium">{label}</span>
-                {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-sidebar-primary-foreground" />}
               </Link>
             )
           })}
         </nav>
 
-        {/* User info at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border/50">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-8 h-8 rounded-full bg-sidebar-primary/20 flex items-center justify-center">
-              <span className="text-xs font-bold text-sidebar-primary">
-                {(userName || "U").charAt(0).toUpperCase()}
+        {/* User profile at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
+          <button
+            onClick={() => setUserMenuOpen(!userMenuOpen)}
+            className="flex items-center gap-3 w-full hover:bg-slate-800 rounded-lg p-2 transition-colors"
+          >
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
+              <span className="text-xs font-bold text-white">
+                {userName
+                  ? userName.split(" ").map((n) => n[0]).join("").toUpperCase()
+                  : "U"}
               </span>
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{userName || "User"}</p>
-              <p className="text-xs text-sidebar-foreground/50">{isAgent ? "Agent" : "Shop Owner"}</p>
+            <div className="flex-1 min-w-0 text-left">
+              <p className="text-sm font-medium text-white truncate">{userName || "User"}</p>
+              <p className="text-xs text-slate-400">{isAgent ? "Agent" : "Shop Owner"}</p>
             </div>
-          </div>
+            <ChevronDown size={14} className="text-slate-400" />
+          </button>
+
+          {userMenuOpen && (
+            <div className="mt-2 bg-slate-800 rounded-lg overflow-hidden">
+              <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors">
+                <LogOut size={14} /> Logout
+              </button>
+            </div>
+          )}
         </div>
       </aside>
     </>

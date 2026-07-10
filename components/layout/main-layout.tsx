@@ -12,6 +12,7 @@ interface MainLayoutProps {
   shopName?: string
   isAgent?: boolean
   userName?: string
+  agentId?: number
 }
 
 export function MainLayout({
@@ -22,20 +23,23 @@ export function MainLayout({
   shopName,
   isAgent = false,
   userName,
+  agentId,
 }: MainLayoutProps) {
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-[#f8fafc]">
       <Sidebar shopId={shopId} isAgent={isAgent} userName={userName} />
-      <main className="flex-1 flex flex-col overflow-hidden lg:ml-64">
+      <main className="flex-1 flex flex-col overflow-hidden lg:ml-[240px]">
         <Header
           title={title}
           subtitle={subtitle}
           shopName={shopName}
           shopId={shopId}
           isAgent={isAgent}
+          agentName={userName}
+          agentId={agentId}
         />
         <div className="flex-1 overflow-auto">
-          <div className="container mx-auto p-4 sm:p-6 lg:p-8 animate-fade-in">{children}</div>
+          <div className="p-6 animate-fade-in">{children}</div>
         </div>
       </main>
     </div>
