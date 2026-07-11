@@ -222,10 +222,17 @@ export default function ShopSalaryPage() {
     .reduce((sum, r) => sum + r.final_payable, 0)
 
   return (
-    <MainLayout title="Salary" shopId={shopId}>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Salary</h1>
-        <div className="flex items-center gap-3">
+    <MainLayout title="Salary" subtitle="Calculate and process monthly staff payroll" shopId={shopId}>
+          <div className="flex items-center justify-end gap-3 mb-6">
+          <div className="text-right">
+             <p className="text-sm text-muted-foreground">Total Pending</p>
+             <p className="text-xl font-bold text-red-600">₹{totalPending.toLocaleString()}</p>
+          </div>
+          <div className="flex items-center gap-2">
+               <Calendar className="h-4 w-4" />
+              <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-auto" />
+          </div>
+          </div>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Total Pending</p>
             <p className="text-xl font-bold text-red-600">₹{totalPending.toLocaleString()}</p>
@@ -239,8 +246,6 @@ export default function ShopSalaryPage() {
               className="w-auto"
             />
           </div>
-        </div>
-      </div>
 
       {loading ? (
         <div className="flex justify-center py-8">

@@ -1,0 +1,60 @@
+"use client"
+
+import { ShopDashboardStats } from "./ShopDashboardStats"
+import { SalesTrendChart } from "./SalesTrendChart"
+import { RevenueBreakdown } from "./RevenueBreakdown"
+import { MonthlyTarget } from "./MonthlyTarget"
+import { RecentSales } from "./RecentSales"
+import { TopAgents } from "./TopAgents"
+import { PendingActions } from "./PendingActions"
+import { QuickActions } from "./QuickActions"
+import { ActivityTimeline } from "./ActivityTimeline"
+
+interface ShopDashboardPageProps {
+  shopId: number
+}
+
+export function ShopDashboardPage({ shopId }: ShopDashboardPageProps) {
+  return (
+    <div className="space-y-6">
+      {/* KPI Stats */}
+      <ShopDashboardStats shopId={shopId} />
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-7">
+          <SalesTrendChart shopId={shopId} />
+        </div>
+        <div className="lg:col-span-3">
+          <RevenueBreakdown shopId={shopId} />
+        </div>
+        <div className="lg:col-span-2">
+          <MonthlyTarget shopId={shopId} />
+        </div>
+      </div>
+
+      {/* Middle Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-5">
+          <RecentSales shopId={shopId} />
+        </div>
+        <div className="lg:col-span-4">
+          <TopAgents shopId={shopId} />
+        </div>
+        <div className="lg:col-span-3">
+          <PendingActions shopId={shopId} />
+        </div>
+      </div>
+
+      {/* Bottom Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-6">
+          <QuickActions shopId={shopId} />
+        </div>
+        <div className="lg:col-span-6">
+          <ActivityTimeline shopId={shopId} />
+        </div>
+      </div>
+    </div>
+  )
+}

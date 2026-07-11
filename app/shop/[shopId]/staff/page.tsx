@@ -162,14 +162,19 @@ export default function ShopStaffPage() {
   }
 
   return (
-    <MainLayout title="Staff" shopId={shopId}>
+    <MainLayout title="Staff & Payroll" subtitle="Manage staff and process payroll" shopId={shopId}>
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Staff</h1>
-          <p className="text-sm text-muted-foreground">Manage staff and payroll</p>
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+          placeholder="Search staff..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+          />
         </div>
         <Button onClick={handleAddStaff}>
-          <Plus className="mr-2 h-4 w-4" /> Add Staff
+        <Plus className="mr-2 h-4 w-4" /> Add Staff
         </Button>
       </div>
 

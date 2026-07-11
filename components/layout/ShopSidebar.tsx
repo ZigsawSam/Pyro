@@ -12,8 +12,6 @@ import {
   Menu,
   X,
   ChevronDown,
-  LogOut,
-  Settings,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -26,8 +24,6 @@ interface ShopSidebarProps {
 export function ShopSidebar({ shopId, shopName, userName }: ShopSidebarProps) {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
-  const [showUserMenu, setShowUserMenu] = useState(false)
-
   const links = shopId
     ? [
         { href: `/shop/${shopId}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
@@ -93,10 +89,7 @@ export function ShopSidebar({ shopId, shopName, userName }: ShopSidebarProps) {
 
         {/* User info at bottom */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border/50 bg-sidebar">
-          <button
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center gap-3 w-full hover:bg-sidebar-accent rounded-xl p-2 transition-colors"
-          >
+          <div className="flex items-center gap-3 w-full rounded-xl p-2">
             <div className="w-8 h-8 rounded-full bg-sidebar-primary/20 flex items-center justify-center">
               <span className="text-xs font-bold text-sidebar-primary">
                 {(userName || "U").charAt(0).toUpperCase()}
@@ -106,29 +99,9 @@ export function ShopSidebar({ shopId, shopName, userName }: ShopSidebarProps) {
               <p className="text-sm font-medium truncate">{userName || "User"}</p>
               <p className="text-xs text-sidebar-foreground/50">Shop Owner</p>
             </div>
-            <ChevronDown size={14} className={`text-sidebar-foreground/50 transition-transform ${showUserMenu ? "rotate-180" : ""}`} />
-          </button>
+          </div>
 
-          {showUserMenu && (
-            <div className="mt-2 bg-sidebar-accent rounded-xl overflow-hidden">
-              <Link
-                href="/settings"
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-primary/10 transition-colors"
-                onClick={() => setShowUserMenu(false)}
-              >
-                <Settings size={14} /> Settings
-              </Link>
-              <button
-                onClick={() => {
-                  setShowUserMenu(false)
-                  window.location.href = "/auth/logout"
-                }}
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
-              >
-                <LogOut size={14} /> Logout
-              </button>
-            </div>
-          )}
+          {/* Settings & Logout moved to header dropdown */}
         </div>
       </aside>
     </>

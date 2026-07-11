@@ -7,12 +7,25 @@ import { Loader2, Users, DollarSign, TrendingUp, Calendar } from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 
+// New dashboard components (from components/dashboard/shop/)
+import { SalesTrendChart } from "@/components/dashboard/shop/SalesTrendChart"
+import { RevenueBreakdown } from "@/components/dashboard/shop/RevenueBreakdown"
+import { MonthlyTarget } from "@/components/dashboard/shop/MonthlyTarget"
+import { RecentSales } from "@/components/dashboard/shop/RecentSales"
+import { TopAgents } from "@/components/dashboard/shop/TopAgents"
+import { PendingActions } from "@/components/dashboard/shop/PendingActions"
+import { QuickActions } from "@/components/dashboard/shop/QuickActions"
+import { ActivityTimeline } from "@/components/dashboard/shop/ActivityTimeline"
+
 export default function ShopDashboardPage() {
   const router = useRouter()
   const params = useParams()
   const supabase = createShopClient()
   const shopId = Number(params?.shopId)
   const [loading, setLoading] = useState(true)
+  const [shopName, setShopName] = useState("")
+
+  // Your existing stats
   const [stats, setStats] = useState({
     totalAgents: 0,
     totalStaff: 0,
@@ -30,6 +43,14 @@ export default function ShopDashboardPage() {
   const fetchDashboardData = async () => {
     setLoading(true)
     try {
+      // Fetch shop name
+      const { data: shop } = await supabase
+        .from("shops")
+        .select("shop_name")
+        .eq("id", shopId)
+        .single()
+      if (shop) setShopName(shop.shop_name)
+
       const today = new Date().toISOString().split("T")[0]
       const monthStart = `${new Date().toISOString().slice(0, 7)}-01`
 
@@ -57,7 +78,7 @@ export default function ShopDashboardPage() {
       const monthSales = (monthSalesData || []).reduce((sum, s) => sum + Number(s.amount || 0), 0)
       const pendingPayouts = (payoutsData || []).reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
 
-      // Calculate staff pending salary same as staff page
+      // === YOUR EXACT STAFF SALARY CALCULATION ===
       let totalPendingSalary = 0
       const staffList = staffData || []
       const attendanceList = attendanceData || []
@@ -86,6 +107,7 @@ export default function ShopDashboardPage() {
 
         totalPendingSalary += Math.max(0, Math.round(salary - totalPayouts))
       })
+      // ===========================================
 
       setStats({
         totalAgents: agentCount || 0,
@@ -112,17 +134,18 @@ export default function ShopDashboardPage() {
 
   if (loading) {
     return (
-      <MainLayout title="Dashboard" shopId={shopId}>
+      <MainLayout title="Dashboard" shopId={shopId} shopName={shopName} isAgent={false}>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
         </div>
       </MainLayout>
     )
   }
 
   return (
-    <MainLayout title="Dashboard" shopId={shopId}>
+    <MainLayout title="Dashboard" shopId={shopId} shopName={shopName} isAgent={false}>
       <div className="space-y-6">
+        {/* === YOUR EXISTING 6 STAT CARDS (PRESERVED) === */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -183,6 +206,28 @@ export default function ShopDashboardPage() {
               <div className="text-2xl font-bold">₹{stats.pendingSalary.toLocaleString()}</div>
             </CardContent>
           </Card>
+        </div>
+
+        {/* === NEW DASHBOARD COMPONENTS (ADDED) === */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <SalesTrendChart shopId={shopId} />
+          </div>
+          <div className="space-y-6">
+            <RevenueBreakdown shopId={shopId} />
+            <MonthlyTarget shopId={shopId} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <RecentSales shopId={shopId} />
+          <TopAgents shopId={shopId} />
+          <PendingActions shopId={shopId} />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <QuickActions shopId={shopId} />
+          <ActivityTimeline shopId={shopId} />
         </div>
       </div>
     </MainLayout>

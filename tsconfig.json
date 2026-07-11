@@ -23,6 +23,6 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
-  ],
+, "components/dashboard/shop/ShopDashboardPage.tsx\t"  ],
   "exclude": ["node_modules"]
 }

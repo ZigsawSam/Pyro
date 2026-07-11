@@ -141,23 +141,18 @@ export default function ShopAgentsPage() {
   return (
     <MainLayout title="Agents" subtitle="Manage agents for your shop" shopId={shopId}>
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Agents</h1>
-          <p className="text-sm text-muted-foreground">Tap an agent to review their profile, or hover a card to pay them.</p>
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search agents..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
         </div>
         <Button onClick={() => router.push(`/shop/${shopId}/agents/add`)}>
           <Plus className="mr-2 h-4 w-4" /> Add Agent
         </Button>
-      </div>
-
-      <div className="relative mb-6">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search agents..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
       </div>
 
       {loading ? (
@@ -184,7 +179,6 @@ export default function ShopAgentsPage() {
                 {agent.description || "No description added yet."}
               </p>
 
-              {/* Pending/Paid summary */}
               <div className="space-y-2 mb-4">
                 <div className="flex items-center justify-between py-2 px-3 bg-secondary/50 rounded-lg">
                   <span className="text-sm font-medium">Pending</span>

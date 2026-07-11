@@ -119,7 +119,6 @@ export default function ShopAttendancePage() {
 
       if (error) throw error
 
-      // Refresh both attendance and logs without page reload
       await fetchAttendance()
       if (showLogs) await fetchLogs()
 
@@ -142,9 +141,8 @@ export default function ShopAttendancePage() {
   }
 
   return (
-    <MainLayout title="Attendance" shopId={shopId}>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Attendance</h1>
+    <MainLayout title="Attendance" subtitle="Track daily staff attendance" shopId={shopId}>
+      <div className="flex items-center justify-between mb-6">
         <div className="flex gap-2">
           <Button variant="outline" onClick={toggleLogs}>
             <CalendarDays className="mr-2 h-4 w-4" />
@@ -155,7 +153,7 @@ export default function ShopAttendancePage() {
       </div>
 
       {showLogs && (
-        <Card className="p-4">
+        <Card className="p-4 mb-6">
           <h2 className="text-lg font-semibold mb-3">Attendance History</h2>
           {logLoading ? (
             <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -254,7 +252,7 @@ export default function ShopAttendancePage() {
           </div>
 
           {staff.length > 0 && (
-            <Button onClick={handleSave} disabled={saving} className="w-full">
+            <Button onClick={handleSave} disabled={saving} className="w-full mt-4">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Save Attendance
             </Button>

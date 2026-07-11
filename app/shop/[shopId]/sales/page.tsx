@@ -201,16 +201,12 @@ export default function ShopSalesPage() {
   const totalCommission = sales.reduce((sum, s) => sum + Number(s.commission_amount || 0), 0)
 
   return (
-    <MainLayout title="Sales" shopId={shopId || undefined}>
+    <MainLayout title="Sales" subtitle="Record and track sales made by your agents" shopId={shopId || undefined}>
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Sales</h1>
-            <p className="text-sm text-muted-foreground">Record and track sales made by your agents</p>
-          </div>
+        <div className="flex items-center justify-end mb-6">
           <Button onClick={() => setShowAddForm(!showAddForm)} className="gap-2">
-            <Plus className="h-4 w-4" /> {showAddForm ? "Cancel" : "Add Sale"}
+          <Plus className="h-4 w-4" /> {showAddForm ? "Cancel" : "Add Sale"}
           </Button>
         </div>
 

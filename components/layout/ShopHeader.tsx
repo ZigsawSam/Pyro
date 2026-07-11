@@ -15,7 +15,6 @@ import {
   Wallet,
   Briefcase,
   X,
-  Calendar,
   UserCircle,
 } from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
@@ -163,10 +162,6 @@ export function ShopHeader({ title, subtitle, shopName, shopId }: ShopHeaderProp
     }
   }
 
-  const today = new Date()
-  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-  const dateRange = `${startOfMonth.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${today.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-
   const displayName = shopName || userData?.name || "Shop Owner"
   const initials = displayName
     .split(" ")
@@ -276,12 +271,6 @@ export function ShopHeader({ title, subtitle, shopName, shopId }: ShopHeaderProp
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Date Range */}
-          <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-600">
-            <Calendar size={14} />
-            {dateRange}
           </div>
 
           {/* User Profile */}

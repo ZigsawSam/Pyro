@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Loader2, Wallet, Clock, CheckCircle, Banknote, ArrowRight } from "lucide-react"
 import { createAgentClient } from "@/lib/supabase/agent-client"
 import { MainLayout } from "@/components/layout/main-layout"
-import { CommissionTrendChart } from "@/components/dashboard/CommissionTrendChart"
+import { CommissionTrendChart } from "@/components/dashboard/agent/CommissionTrendChart"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 

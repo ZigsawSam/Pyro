@@ -50,31 +50,26 @@ export default function ShopPayoutsPage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      // Fetch linked agents with pending commission
       const { data: agentsData } = await supabase
         .from("shop_agents")
         .select("agent_id, commission_rate, agents:agent_id(id, name)")
         .eq("shop_id", shopId)
 
-      // Fetch staff
       const { data: staffData } = await supabase
         .from("staff")
         .select("id, name")
         .eq("shop_id", shopId)
 
-      // Fetch sales for commission calculation
       const { data: salesData } = await supabase
         .from("sales")
         .select("agent_id, amount, commission_amount")
         .eq("shop_id", shopId)
 
-      // Fetch payouts for deduction
       const { data: payoutsData } = await supabase
         .from("payouts")
         .select("agent_id, staff_id, amount_paid")
         .eq("shop_id", shopId)
 
-      // Calculate pending commission for agents
       const agentSales = (salesData || []).reduce((acc: any, s: any) => {
         if (!acc[s.agent_id]) acc[s.agent_id] = { total: 0, commission: 0 }
         acc[s.agent_id].total += Number(s.amount || 0)
@@ -95,7 +90,6 @@ export default function ShopPayoutsPage() {
         pending_commission: (agentSales[a.agent_id]?.commission || 0) - (agentPayouts[a.agent_id] || 0),
       }))
 
-      // Calculate pending for staff (simplified - you may have different logic)
       const staffPayouts = (payoutsData || [])
         .filter((p: any) => p.staff_id)
         .reduce((acc: any, p: any) => {
@@ -106,13 +100,12 @@ export default function ShopPayoutsPage() {
       const formattedStaff = (staffData || []).map((s: any) => ({
         id: s.id,
         name: s.name,
-        pending_commission: 0, // Staff logic may differ
+        pending_commission: 0,
       }))
 
       setAgents(formattedAgents)
       setStaff(formattedStaff)
 
-      // Fetch payouts with enriched names
       const { data: payoutsRaw, error } = await supabase
         .from("payouts")
         .select("*")
@@ -151,32 +144,26 @@ export default function ShopPayoutsPage() {
         return
       }
 
-      // Get current pending commission
       const personList = newPayout.person_type === "agent" ? agents : staff
       const person = personList.find((p: any) => p.id === personId)
       const pendingCommission = person?.pending_commission || 0
 
-      // Calculate distribution
       let pendingDeducted = 0
       let advanceAmount = 0
 
       if (pendingCommission > 0) {
         if (paymentAmount >= pendingCommission) {
-          // Scenario 1: Payment covers all pending + advance
           pendingDeducted = pendingCommission
           advanceAmount = paymentAmount - pendingCommission
         } else {
-          // Scenario 2: Payment partially covers pending
           pendingDeducted = paymentAmount
           advanceAmount = 0
         }
       } else {
-        // Scenario 3: No pending, all goes to advance
         pendingDeducted = 0
         advanceAmount = paymentAmount
       }
 
-      // Build payout data
       const payoutData: any = {
         shop_id: shopId,
         person_type: newPayout.person_type,
@@ -213,19 +200,14 @@ export default function ShopPayoutsPage() {
   const personOptions = newPayout.person_type === "agent" ? agents : staff
 
   return (
-    <MainLayout title="Payouts" shopId={shopId}>
+    <MainLayout title="Payouts" subtitle="Record payments to agents and staff" shopId={shopId}>
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Payouts</h1>
-            <p className="text-sm text-muted-foreground">Record payments to agents and staff</p>
-          </div>
+        <div className="flex items-center justify-end">
           <Button onClick={() => setShowAddForm(!showAddForm)} className="gap-2">
             <Plus className="h-4 w-4" /> {showAddForm ? "Cancel" : "Record Payout"}
           </Button>
         </div>
 
-        {/* Add Payout Form */}
         {showAddForm && (
           <Card className="p-4 space-y-4">
             <h3 className="font-semibold flex items-center gap-2">
@@ -307,7 +289,6 @@ export default function ShopPayoutsPage() {
           </Card>
         )}
 
-        {/* Payouts List */}
         {loading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin" />

@@ -55,11 +55,9 @@ export default function ShopReportsPage() {
           .lte("attendance_date", to),
       ])
 
-      // ─── Sales & Commission ───
       const totalSales = (salesData || []).reduce((sum, s) => sum + Number(s.amount || 0), 0)
       const totalCommission = (salesData || []).reduce((sum, s) => sum + Number(s.commission_amount || 0), 0)
 
-      // ─── Payouts Breakdown ───
       const agentPayouts = (payoutsData || [])
         .filter((p) => p.person_type === "agent")
         .reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
@@ -68,12 +66,10 @@ export default function ShopReportsPage() {
         .filter((p) => p.person_type === "staff")
         .reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
 
-      // ─── Commission Math ───
       const totalPaidCommissions = agentPayouts
       const pendingCommissions = Math.max(0, totalCommission - totalPaidCommissions)
       const advancesToAgents = Math.max(0, totalPaidCommissions - totalCommission)
 
-      // ─── Salary Math (from attendance, same as staff page) ───
       const staffList = staffData || []
       const attendanceList = attendanceData || []
       let totalSalary = 0
@@ -122,75 +118,19 @@ export default function ShopReportsPage() {
 
   const cards = reportData
     ? [
-        {
-          label: "Total Sales",
-          value: reportData.totalSales,
-          icon: TrendingUp,
-          color: "text-foreground",
-          bg: "bg-card",
-          sub: null,
-        },
-        {
-          label: "Total Commission",
-          value: reportData.totalCommission,
-          icon: Wallet,
-          color: "text-green-600",
-          bg: "bg-green-50 dark:bg-green-950/20",
-          sub: null,
-        },
-        {
-          label: "Total Paid Commissions",
-          value: reportData.totalPaidCommissions,
-          icon: Briefcase,
-          color: "text-blue-600",
-          bg: "bg-blue-50 dark:bg-blue-950/20",
-          sub: null,
-        },
-        {
-          label: "Pending Commissions Left",
-          value: reportData.pendingCommissions,
-          icon: Clock,
-          color: "text-amber-600",
-          bg: "bg-amber-50 dark:bg-amber-950/20",
-          sub: null,
-        },
-        {
-          label: "Advances To Agents",
-          value: reportData.advancesToAgents,
-          icon: AlertCircle,
-          color: "text-red-600",
-          bg: "bg-red-50 dark:bg-red-950/20",
-          sub: reportData.advancesToAgents > 0 ? "Overpaid beyond commission" : null,
-        },
-        {
-          label: "Advances To Staff",
-          value: reportData.advancesToStaff,
-          icon: AlertCircle,
-          color: "text-red-600",
-          bg: "bg-red-50 dark:bg-red-950/20",
-          sub: reportData.advancesToStaff > 0 ? "Overpaid beyond salary" : null,
-        },
-        {
-          label: "Total Salary",
-          value: reportData.totalSalary,
-          icon: Users,
-          color: "text-purple-600",
-          bg: "bg-purple-50 dark:bg-purple-950/20",
-          sub: null,
-        },
-        {
-          label: "Pending Salary Left",
-          value: reportData.pendingSalary,
-          icon: PiggyBank,
-          color: "text-orange-600",
-          bg: "bg-orange-50 dark:bg-orange-950/20",
-          sub: reportData.totalPaidSalary > 0 ? `Paid: ₹${reportData.totalPaidSalary.toLocaleString()}` : null,
-        },
+        { label: "Total Sales", value: reportData.totalSales, icon: TrendingUp, color: "text-foreground", bg: "bg-card", sub: null },
+        { label: "Total Commission", value: reportData.totalCommission, icon: Wallet, color: "text-green-600", bg: "bg-green-50 dark:bg-green-950/20", sub: null },
+        { label: "Total Paid Commissions", value: reportData.totalPaidCommissions, icon: Briefcase, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/20", sub: null },
+        { label: "Pending Commissions Left", value: reportData.pendingCommissions, icon: Clock, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/20", sub: null },
+        { label: "Advances To Agents", value: reportData.advancesToAgents, icon: AlertCircle, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/20", sub: reportData.advancesToAgents > 0 ? "Overpaid beyond commission" : null },
+        { label: "Advances To Staff", value: reportData.advancesToStaff, icon: AlertCircle, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/20", sub: reportData.advancesToStaff > 0 ? "Overpaid beyond salary" : null },
+        { label: "Total Salary", value: reportData.totalSalary, icon: Users, color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950/20", sub: null },
+        { label: "Pending Salary Left", value: reportData.pendingSalary, icon: PiggyBank, color: "text-orange-600", bg: "bg-orange-50 dark:bg-orange-950/20", sub: reportData.totalPaidSalary > 0 ? `Paid: ₹${reportData.totalPaidSalary.toLocaleString()}` : null },
       ]
     : []
 
   return (
-    <MainLayout title="Reports" shopId={shopId}>
+    <MainLayout title="Reports" subtitle="View sales and commission reports" shopId={shopId}>
       <Card className="p-4 card-hover">
         <div className="flex gap-3 items-end flex-wrap">
           <div>

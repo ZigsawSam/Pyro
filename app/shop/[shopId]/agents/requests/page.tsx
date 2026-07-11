@@ -69,7 +69,6 @@ export default function AgentRequestsPage() {
     try {
       const request = requests.find((r) => r.id === requestId)
 
-    
       if (request?.requested_by === "shop") {
         alert("You cannot accept or reject your own sent request. The agent must respond.")
         return
@@ -104,7 +103,7 @@ export default function AgentRequestsPage() {
   }
 
   return (
-    <MainLayout title="Agent Requests" shopId={shopId}>
+    <MainLayout title="Agent Requests" subtitle="Review and manage agent join requests" shopId={shopId}>
       {loading ? (
         <div className="flex justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin" />
