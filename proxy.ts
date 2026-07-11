@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
-export async function updateSession(request: NextRequest) {
+async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
     request: { headers: request.headers },
   })
@@ -28,7 +28,7 @@ export async function updateSession(request: NextRequest) {
   return { response, user }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { response, user } = await updateSession(request)
   const { pathname } = request.nextUrl
 
