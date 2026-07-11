@@ -1,12 +1,10 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Store, UserPlus, ArrowRight, User } from "lucide-react"
 
 export default function LandingPage() {
-  const router = useRouter()
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex flex-col">
       <nav className="w-full px-6 py-4 flex items-center justify-between max-w-7xl mx-auto">
@@ -37,26 +35,21 @@ export default function LandingPage() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center gap-4 mb-8">
-          <Button
-            size="lg"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-base rounded-xl"
-            onClick={() => router.push("/auth/login?role=shop")}
-          >
-            <Store className="w-5 h-5 mr-2" />
-            Shop Owner Login
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
+          <Link href="/auth/login?role=shop">
+            <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-base rounded-xl">
+              <Store className="w-5 h-5 mr-2" />
+              Shop Owner Login
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
 
-          <Button
-            size="lg"
-            variant="outline"
-            className="px-8 py-6 text-base rounded-xl border-slate-300"
-            onClick={() => router.push("/auth/register?role=shop")}
-          >
-            <UserPlus className="w-5 h-5 mr-2" />
-            Create Shop
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
+          <Link href="/auth/register?role=shop">
+            <Button size="lg" variant="outline" className="px-8 py-6 text-base rounded-xl border-slate-300">
+              <UserPlus className="w-5 h-5 mr-2" />
+              Create Shop
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
         </div>
 
         <div className="flex items-center gap-4 text-sm text-slate-400 mb-8 w-full max-w-md">
@@ -66,27 +59,21 @@ export default function LandingPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-4">
-          <Button
-            size="lg"
-            variant="outline"
-            className="px-8 py-6 text-base rounded-xl border-slate-300"
-            onClick={() => router.push("/auth/login?role=agent")}
-          >
-            <ArrowRight className="w-5 h-5 mr-2" />
-            Agent Login
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
+          <Link href="/auth/login?role=agent">
+            <Button size="lg" variant="outline" className="px-8 py-6 text-base rounded-xl border-slate-300">
+              <ArrowRight className="w-5 h-5 mr-2" />
+              Agent Login
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
 
-          <Button
-            size="lg"
-            variant="outline"
-            className="px-8 py-6 text-base rounded-xl border-slate-300"
-            onClick={() => router.push("/auth/register?role=agent")}
-          >
-            <User className="w-5 h-5 mr-2" />
-            Register as Agent
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
+          <Link href="/auth/register?role=agent">
+            <Button size="lg" variant="outline" className="px-8 py-6 text-base rounded-xl border-slate-300">
+              <User className="w-5 h-5 mr-2" />
+              Register as Agent
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
         </div>
       </main>
     </div>
