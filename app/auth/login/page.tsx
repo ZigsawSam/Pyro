@@ -25,43 +25,47 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
     try {
-      const loginPromise = supabase.auth.signInWithPassword({ email, password })
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("LOGIN_TIMEOUT")), 10000)
-      )
-      let result: any
-      try {
-        result = await Promise.race([loginPromise, timeoutPromise])
-      } catch (timeoutErr: any) {
-        if (timeoutErr.message === "LOGIN_TIMEOUT") {
-          const { data: sessionData } = await supabase.auth.getSession()
-          if (sessionData?.session) {
-            result = { data: { session: sessionData.session, user: sessionData.session.user }, error: null }
-          } else {
-            throw new Error("Login timed out. Please try again.")
-          }
-        } else {
-          throw timeoutErr
-        }
-      }
-      if (result.error || !result.data?.user) {
-        setError(result.error?.message || "Invalid credentials")
+      console.log("[LOGIN] Attempting login for:", email)
+
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password 
+      })
+
+      console.log("[LOGIN] Auth result:", { authData, authError })
+
+      if (authError || !authData?.user) {
+        setError(authError?.message || "Invalid login credentials")
         setLoading(false)
         return
       }
+
+      console.log("[LOGIN] Auth user ID:", authData.user.id)
+
       const { data: shop, error: shopError } = await supabase
         .from("shops")
-        .select("id")
-        .eq("user_id", result.data.user.id)
+        .select("id, shop_name, user_id")
+        .eq("user_id", authData.user.id)
         .single()
+
+      console.log("[LOGIN] Shop lookup result:", { shop, shopError })
+
       if (shopError || !shop) {
+        console.log("[LOGIN] No shop found — checking all shops for this user_id...")
+
+        // Debug: list all shops to see what's there
+        const { data: allShops } = await supabase.from("shops").select("id, shop_name, user_id, email")
+        console.log("[LOGIN] All shops in DB:", allShops)
+
         setError("No shop found for this account. Please register.")
         setLoading(false)
         return
       }
+
+      console.log("[LOGIN] Success! Redirecting to dashboard:", `/shop/${shop.id}/dashboard`)
       window.location.href = `/shop/${shop.id}/dashboard`
     } catch (err: any) {
-      console.error("Login error:", err)
+      console.error("[LOGIN] Error:", err)
       setError(err.message || "Login failed")
       setLoading(false)
     }
@@ -71,9 +75,7 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
     try {
-      // Agent email format from DB: phone@agent.local
       const agentEmail = `${phone}@agent.local`
-      // If no password provided, use phone number as password
       const agentPassword = password || phone
 
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -87,7 +89,6 @@ export default function LoginPage() {
         return
       }
 
-      // Verify agent exists in agents table by user_id
       const { data: agent, error: agentError } = await supabase
         .from("agents")
         .select("id, name, phone_number, user_id")
@@ -102,7 +103,7 @@ export default function LoginPage() {
 
       window.location.href = "/agent/dashboard"
     } catch (err: any) {
-      console.error("Agent login error:", err)
+      console.error("[LOGIN] Agent error:", err)
       setError(err.message || "Login failed")
       setLoading(false)
     }
