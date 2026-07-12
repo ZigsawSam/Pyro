@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loader2, Pencil, Trash2, Wallet, CheckCircle2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"  // ← FIXED: use sonner, not use-toast
 
 interface StaffProfileDialogProps {
   open: boolean
@@ -65,7 +66,7 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
     if (open && staff) {
       calculatePayroll()
     }
-  }, [open])
+  }, [open, staff?.id])  // ← FIXED: added staff?.id dependency
 
   const calculatePayroll = async () => {
     if (!staff) return
@@ -113,8 +114,9 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
       setTotalPaid(totalPayouts)
       setPendingPayroll(Math.max(0, Math.round(salary - totalPayouts)))
       setPayoutHistory(payoutsData || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error("calculatePayroll error:", error)
+      toast.error(error?.message || "Failed to calculate payroll")
     }
   }
 
@@ -143,10 +145,12 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
         .eq("shop_id", shopId)
 
       if (error) throw error
+      toast.success("Staff updated successfully")
       onUpdated()
       onOpenChange(false)
-    } catch (error) {
-      console.error(error)
+    } catch (error: any) {
+      console.error("Save error:", error)
+      toast.error(error?.message || "Failed to save staff")
     } finally {
       setIsSaving(false)
     }
@@ -154,20 +158,37 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
 
   const handleDelete = async () => {
     if (!staff) return
-    if (!window.confirm("Remove this staff member? Payroll history will be kept.")) return
     setIsDeleting(true)
+
     try {
-      const { error } = await supabase
+      const { error, data, count } = await supabase
         .from("staff")
         .delete()
         .eq("id", staff.id)
-        .eq("shop_id", shopId)
+        .select()
 
-      if (error) throw error
-      onDeleted()
+      console.log("Delete response:", { error, data, count })
+
+      if (error) {
+        console.error("Delete error:", error)
+        toast.error(error.message || error.details || error.hint || "Failed to delete staff")
+        setIsDeleting(false)
+        return
+      }
+
+      if (!data || data.length === 0) {
+        console.warn("No rows deleted — likely RLS policy blocked it")
+        toast.error("Delete blocked — check RLS policy or FK constraints")
+        setIsDeleting(false)
+        return
+      }
+
+      toast.success(`${staff.name} deleted successfully`)
+      onDeleted?.()
       onOpenChange(false)
-    } catch (error) {
-      console.error(error)
+    } catch (error: any) {
+      console.error("Delete catch error:", error)
+      toast.error(error?.message || "Failed to delete staff")
     } finally {
       setIsDeleting(false)
     }
@@ -274,7 +295,6 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Concise info box - same style as agent */}
               <div className="rounded-lg border bg-muted/20 p-4 text-sm space-y-2">
                 <p><span className="font-medium">Role:</span> {staff.role}</p>
                 <p><span className="font-medium">Salary Type:</span> {staff.salary_type}</p>
@@ -288,7 +308,6 @@ export function StaffProfileDialog({ open, onOpenChange, shopId, staff, onUpdate
                 {staff.upi_id ? <p><span className="font-medium">UPI:</span> {staff.upi_id}</p> : null}
               </div>
 
-              {/* Payout History - same style as agent "Advances Taken" */}
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Wallet className="h-4 w-4 text-amber-700" />

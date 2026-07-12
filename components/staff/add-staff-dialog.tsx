@@ -33,6 +33,7 @@ export function AddStaffDialog({ open, onOpenChange, onStaffAdded, shopId }: Add
     bank_name: "",
     ifsc_code: "",
     upi_id: "",
+    joining_date: new Date().toISOString().split("T")[0],
   })
 
   const handleAddStaff = async () => {
@@ -41,24 +42,25 @@ export function AddStaffDialog({ open, onOpenChange, onStaffAdded, shopId }: Add
 
     try {
       const { error: insertError } = await supabase
-        .from("staff")
-        .insert({
-          shop_id: shopId,
-          name: formData.name,
-          phone: formData.phone,
-          role: formData.role,
-          salary_type: formData.salary_type,
-          base_salary: Number.parseFloat(formData.base_salary) || 0,
-          working_hours_per_day: Number.parseInt(formData.working_hours_per_day) || 8,
-          overtime_rate: Number.parseFloat(formData.overtime_rate) || 0,
-          description: formData.description,
-          account_name: formData.account_name,
-          account_number: formData.account_number,
-          bank_name: formData.bank_name,
-          ifsc_code: formData.ifsc_code,
-          upi_id: formData.upi_id,
-          is_active: true,
-        })
+  .from("staff")
+  .insert({
+    shop_id: shopId,
+    name: formData.name,
+    phone: formData.phone,
+    role: formData.role,
+    salary_type: formData.salary_type,
+    base_salary: Number.parseFloat(formData.base_salary) || 0,
+    working_hours_per_day: Number.parseInt(formData.working_hours_per_day) || 8,
+    overtime_rate: Number.parseFloat(formData.overtime_rate) || 0,
+    description: formData.description,
+    account_name: formData.account_name,
+    account_number: formData.account_number,
+    bank_name: formData.bank_name,
+    ifsc_code: formData.ifsc_code,
+    upi_id: formData.upi_id,
+    is_active: true,
+    joining_date: new Date().toISOString().split("T")[0],  // ← ADD THIS
+  })
 
       if (insertError) throw new Error(insertError.message)
 
@@ -78,6 +80,7 @@ export function AddStaffDialog({ open, onOpenChange, onStaffAdded, shopId }: Add
         bank_name: "",
         ifsc_code: "",
         upi_id: "",
+        joining_date: new Date().toISOString().split("T")[0],
       })
     } catch (err: any) {
       setError(err.message || "An error occurred")
@@ -113,6 +116,14 @@ export function AddStaffDialog({ open, onOpenChange, onStaffAdded, shopId }: Add
           <div>
             <label className="mb-1 block text-sm font-medium">Role</label>
             <Input placeholder="Manager, Sales, etc." value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Joining Date</label>
+            <Input 
+            type="date" 
+            value={formData.joining_date} 
+            onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })} 
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Salary Type</label>
