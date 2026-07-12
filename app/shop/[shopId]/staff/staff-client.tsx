@@ -9,6 +9,7 @@ import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 import { StaffProfileDialog } from "@/components/staff/staff-profile-dialog"
 import { PayStaffDialog } from "@/components/staff/pay-staff-dialog"
+import { AddStaffDialog } from "@/components/staff/add-staff-dialog"
 
 interface StaffMember {
   id: number
@@ -55,6 +56,7 @@ export function ShopStaffPage({ shopId: shopIdProp, user }: ShopStaffPageProps) 
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [showPayDialog, setShowPayDialog] = useState(false)
+  const [showAddDialog, setShowAddDialog] = useState(false)
   const [attendanceSummary, setAttendanceSummary] = useState<Record<number, AttendanceSummary>>({})
   const [payoutsMap, setPayoutsMap] = useState<Record<number, number>>({})
 
@@ -272,6 +274,12 @@ export function ShopStaffPage({ shopId: shopIdProp, user }: ShopStaffPageProps) 
           setShowPayDialog(false)
           fetchStaff()
         }}
+      />
+          <AddStaffDialog
+        open={showAddDialog}
+        onOpenChange={setShowAddDialog}
+        onStaffAdded={() => { setShowAddDialog(false); fetchStaff() }}
+        shopId={shopId}
       />
     </MainLayout>
   )
