@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -10,6 +9,7 @@ import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 import { AgentProfileDialog } from "@/components/agents/agent-profile-dialog"
 import { PayAgentDialog } from "@/components/agents/pay-agent-dialog"
+import { AddAgentDialog } from "@/components/agents/add-agent-dialog"
 
 interface Agent {
   id: number
@@ -34,7 +34,6 @@ interface ShopAgentsPageProps {
 }
 
 export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps) {
-  const router = useRouter()
   const supabase = createShopClient()
   
   const shopId = parseInt(shopIdProp, 10)
@@ -45,6 +44,7 @@ export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [showPayDialog, setShowPayDialog] = useState(false)
+  const [showAddDialog, setShowAddDialog] = useState(false)
 
   useEffect(() => {
     if (!isNaN(shopId)) fetchAgents(shopId)
@@ -142,7 +142,7 @@ export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps
             className="pl-10"
           />
         </div>
-        <Button onClick={() => router.push(`/shop/${shopIdProp}/agents/add`)}>
+        <Button onClick={() => setShowAddDialog(true)}>
           <Plus className="mr-2 h-4 w-4" /> Add Agent
         </Button>
       </div>
@@ -213,6 +213,13 @@ export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps
         shopId={shopId}
         agent={selectedAgent}
         onPaid={() => { setShowPayDialog(false); if (!isNaN(shopId)) fetchAgents(shopId) }}
+      />
+
+      <AddAgentDialog
+        open={showAddDialog}
+        onOpenChange={setShowAddDialog}
+        onAgentAdded={() => { setShowAddDialog(false); if (!isNaN(shopId)) fetchAgents(shopId) }}
+        shopId={shopId}
       />
     </MainLayout>
   )
