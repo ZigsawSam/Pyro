@@ -27,7 +27,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Public routes - always allow
-  if (pathname === "/" || pathname.startsWith("/auth") || pathname.startsWith("/_next") || pathname.startsWith("/api") || /\\.(svg|png|jpg|jpeg|gif|webp|ico|css|js)$/.test(pathname)) {
+  if (pathname === "/" || pathname.startsWith("/auth") || pathname.startsWith("/_next") || pathname.startsWith("/api") || /\.(svg|png|jpg|jpeg|gif|webp|ico|css|js)$/.test(pathname)) {
     return response
   }
 
@@ -36,13 +36,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/auth/login", request.url))
   }
 
-  const role = user.user_metadata?.role
-  if (pathname.startsWith("/shop") && role === "agent") {
-    return NextResponse.redirect(new URL("/agent/dashboard", request.url))
-  }
-  if (pathname.startsWith("/agent") && role === "shop") {
-    return NextResponse.redirect(new URL("/shop", request.url))
-  }
+  // REMOVED: Role-based redirects cause loops.
+  // Let server components (auth-guard.ts) handle role validation.
+  // The proxy only ensures the user is authenticated.
 
   return response
 }
