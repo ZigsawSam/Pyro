@@ -71,9 +71,9 @@ interface DailySales {
   amount: number
 }
 
-export function AgentDashboardPage({ user, agentId ) {
-  const router = useRouter{ user, agentId }: { user?: any, agentId?: string }
-  const supabase = createAgentClient{ user, agentId }: { user?: any, agentId?: string }
+export function AgentDashboardPage({ user, agentId }) {
+  const router = useRouter
+  const supabase = createAgentClient
   const [agentId, setAgentId] = useState<number | null>(null)
   const [agentName, setAgentName] = useState<string>("")
   const [invitations, setInvitations] = useState<Invitation[]>([])
@@ -111,9 +111,9 @@ export function AgentDashboardPage({ user, agentId ) {
   const [monthlyTarget, setMonthlyTarget] = useState(200000)
   const [monthlyAchieved, setMonthlyAchieved] = useState(0)
 
-  useEffect({ user, agentId }: { user?: any, agentId?: string } => {
-    const checkAuth = async { user, agentId }: { user?: any, agentId?: string } => {
-      const { data: { user } } = await supabase.auth.getUser{ user, agentId }: { user?: any, agentId?: string }
+  useEffect( => {
+    const checkAuth = async  => {
+      const { data: { user } } = await supabase.auth.getUser
       if (!user) {
         return
       }
@@ -121,7 +121,7 @@ export function AgentDashboardPage({ user, agentId ) {
         .from("agents")
         .select("id, name")
         .eq("user_id", user.id)
-        .single{ user, agentId }: { user?: any, agentId?: string }
+        .single
 
       if (!agent) {
         return
@@ -131,7 +131,7 @@ export function AgentDashboardPage({ user, agentId ) {
       setAgentName(agent.name)
       fetchData(agent.id)
     }
-    checkAuth{ user, agentId }: { user?: any, agentId?: string }
+    checkAuth
   }, [router, supabase])
 
   const fetchData = async (id: number) => {
@@ -226,10 +226,10 @@ export function AgentDashboardPage({ user, agentId ) {
     } catch (e) { console.error(e) }
 
     // Calculate current period stats
-    const now = new Date{ user, agentId }: { user?: any, agentId?: string }
-    const currentMonthStart = new Date(now.getFullYear{ user, agentId }: { user?: any, agentId?: string }, now.getMonth{ user, agentId }: { user?: any, agentId?: string }, 1)
-    const prevMonthStart = new Date(now.getFullYear{ user, agentId }: { user?: any, agentId?: string }, now.getMonth{ user, agentId }: { user?: any, agentId?: string } - 1, 1)
-    const prevMonthEnd = new Date(now.getFullYear{ user, agentId }: { user?: any, agentId?: string }, now.getMonth{ user, agentId }: { user?: any, agentId?: string }, 0)
+    const now = new Date
+    const currentMonthStart = new Date(now.getFullYear, now.getMonth, 1)
+    const prevMonthStart = new Date(now.getFullYear, now.getMonth - 1, 1)
+    const prevMonthEnd = new Date(now.getFullYear, now.getMonth, 0)
 
     const currentMonthSales = salesData.filter(s => new Date(s.sale_date) >= currentMonthStart)
     const prevMonthSales = salesData.filter(s => {
@@ -261,9 +261,9 @@ export function AgentDashboardPage({ user, agentId ) {
     // Daily sales for chart (last 10 days)
     const last10Days: DailySales[] = []
     for (let i = 9; i >= 0; i--) {
-      const d = new Date{ user, agentId }: { user?: any, agentId?: string }
-      d.setDate(d.getDate{ user, agentId }: { user?: any, agentId?: string } - i)
-      const dateStr = d.toISOString{ user, agentId }: { user?: any, agentId?: string }.split("T")[0]
+      const d = new Date
+      d.setDate(d.getDate - i)
+      const dateStr = d.toISOString.split("T")[0]
       const daySales = salesData
         .filter((s: any) => s.sale_date?.startsWith(dateStr))
         .reduce((sum, s) => sum + Number(s.amount || 0), 0)
@@ -284,7 +284,7 @@ export function AgentDashboardPage({ user, agentId ) {
         type: "onboarded",
         title: "Shop Onboarded",
         description: `New shop "${link.shops?.shop_name || "Unknown"}" has been onboarded`,
-        created_at: link.created_at || new Date{ user, agentId }: { user?: any, agentId?: string }.toISOString{ user, agentId }: { user?: any, agentId?: string },
+        created_at: link.created_at || new Date.toISOString,
         status: "Completed"
       })
     })
@@ -296,7 +296,7 @@ export function AgentDashboardPage({ user, agentId ) {
         id: 100 + idx,
         type: "commission",
         title: "Commission Confirmed",
-        description: `₹${Number(sale.commission_amount || 0).toLocaleString{ user, agentId }: { user?: any, agentId?: string }} commission from ${shopName}`,
+        description: `₹${Number(sale.commission_amount || 0).toLocaleString} commission from ${shopName}`,
         created_at: sale.sale_date,
         status: "Confirmed"
       })
@@ -308,14 +308,14 @@ export function AgentDashboardPage({ user, agentId ) {
         id: 200 + idx,
         type: "payout",
         title: "Payout Initiated",
-        description: `Payout of ₹${Number(payout.amount_paid || 0).toLocaleString{ user, agentId }: { user?: any, agentId?: string }} has been initiated`,
+        description: `Payout of ₹${Number(payout.amount_paid || 0).toLocaleString} has been initiated`,
         created_at: payout.created_at,
         status: "Processing"
       })
     })
 
     // Sort by date descending and take top 5
-    activityItems.sort((a, b) => new Date(b.created_at).getTime{ user, agentId }: { user?: any, agentId?: string } - new Date(a.created_at).getTime{ user, agentId }: { user?: any, agentId?: string })
+    activityItems.sort((a, b) => new Date(b.created_at).getTime - new Date(a.created_at).getTime)
     const topActivity = activityItems.slice(0, 5)
 
     setTotalSales(totalSalesAmt)
@@ -357,7 +357,7 @@ export function AgentDashboardPage({ user, agentId ) {
     setLoading(false)
   }
 
-  const fetchSales = async { user, agentId }: { user?: any, agentId?: string } => {
+  const fetchSales = async  => {
     if (!agentId) return
     setSalesLoading(true)
     try {
@@ -399,37 +399,37 @@ export function AgentDashboardPage({ user, agentId ) {
     }
   }
 
-  useEffect({ user, agentId }: { user?: any, agentId?: string } => {
-    if (showSalesSection && agentId) fetchSales{ user, agentId }: { user?: any, agentId?: string }
+  useEffect( => {
+    if (showSalesSection && agentId) fetchSales
   }, [showSalesSection, salesFilterShop, salesDateFrom, salesDateTo, agentId])
 
   // Computed stats
-  const salesGrowth = useMemo({ user, agentId }: { user?: any, agentId?: string } => {
+  const salesGrowth = useMemo( => {
     if (prevPeriodSales === 0) return totalSales > 0 ? 100 : 0
     return Number((((totalSales - prevPeriodSales) / prevPeriodSales) * 100).toFixed(1))
   }, [totalSales, prevPeriodSales])
 
-  const commissionGrowth = useMemo({ user, agentId }: { user?: any, agentId?: string } => {
+  const commissionGrowth = useMemo( => {
     if (prevPeriodCommission === 0) return totalCommission > 0 ? 100 : 0
     return Number((((totalCommission - prevPeriodCommission) / prevPeriodCommission) * 100).toFixed(1))
   }, [totalCommission, prevPeriodCommission])
 
-  const payoutGrowth = useMemo({ user, agentId }: { user?: any, agentId?: string } => {
+  const payoutGrowth = useMemo( => {
     if (prevPeriodPayouts === 0) return totalPayouts > 0 ? 100 : 0
     return Number((((totalPayouts - prevPeriodPayouts) / prevPeriodPayouts) * 100).toFixed(1))
   }, [totalPayouts, prevPeriodPayouts])
 
-  const monthlyProgress = useMemo({ user, agentId }: { user?: any, agentId?: string } => {
+  const monthlyProgress = useMemo( => {
     if (monthlyTarget === 0) return 0
     return Math.min(100, Math.round((monthlyAchieved / monthlyTarget) * 100))
   }, [monthlyAchieved, monthlyTarget])
 
-  const maxDailySale = useMemo({ user, agentId }: { user?: any, agentId?: string } => {
+  const maxDailySale = useMemo( => {
     return Math.max(...dailySales.map(d => d.amount), 1)
   }, [dailySales])
 
-  const handleSearch = async { user, agentId }: { user?: any, agentId?: string } => {
-    if (!searchQuery.trim{ user, agentId }: { user?: any, agentId?: string } || !agentId) return
+  const handleSearch = async  => {
+    if (!searchQuery.trim || !agentId) return
     setSearching(true)
     try {
       const { data: shops, error } = await supabase
@@ -470,7 +470,7 @@ export function AgentDashboardPage({ user, agentId ) {
     finally { setSearching(false) }
   }
 
-  const handleRequest = async { user, agentId }: { user?: any, agentId?: string } => {
+  const handleRequest = async  => {
     if (!selectedShop || !requestRate || !agentId) return
     setSubmitting(true)
     try {
@@ -479,7 +479,7 @@ export function AgentDashboardPage({ user, agentId ) {
         .select("id, status")
         .eq("agent_id", agentId)
         .eq("shop_id", selectedShop.id)
-        .maybeSingle{ user, agentId }: { user?: any, agentId?: string }
+        .maybeSingle
 
       if (existing?.status === "pending") {
         alert("You already have a pending request for this shop")
@@ -487,7 +487,7 @@ export function AgentDashboardPage({ user, agentId ) {
         return
       }
       if (existing?.status === "rejected") {
-        await supabase.from("agent_link_requests").delete{ user, agentId }: { user?: any, agentId?: string }.eq("id", existing.id)
+        await supabase.from("agent_link_requests").delete.eq("id", existing.id)
       }
 
       const { error } = await supabase
@@ -503,7 +503,7 @@ export function AgentDashboardPage({ user, agentId ) {
       setSelectedShop(null)
       setRequestRate("")
       setRequestMessage("")
-      handleSearch{ user, agentId }: { user?: any, agentId?: string }
+      handleSearch
       alert("Request sent successfully!")
     } catch (e) {
       console.error("handleRequest error:", e)
@@ -536,7 +536,7 @@ export function AgentDashboardPage({ user, agentId ) {
           .from(table)
           .select("shop_id, agent_id, commission_rate")
           .eq("id", inviteId)
-          .single{ user, agentId }: { user?: any, agentId?: string }
+          .single
 
         if (req) {
           await supabase.from("shop_agents").insert({
@@ -557,8 +557,8 @@ export function AgentDashboardPage({ user, agentId ) {
 
   const formatRelativeTime = (dateStr: string) => {
     const date = new Date(dateStr)
-    const now = new Date{ user, agentId }: { user?: any, agentId?: string }
-    const diffMs = now.getTime{ user, agentId }: { user?: any, agentId?: string } - date.getTime{ user, agentId }: { user?: any, agentId?: string }
+    const now = new Date
+    const diffMs = now.getTime - date.getTime
     const diffMins = Math.floor(diffMs / 60000)
     const diffHours = Math.floor(diffMs / 3600000)
     const diffDays = Math.floor(diffMs / 86400000)
@@ -567,7 +567,7 @@ export function AgentDashboardPage({ user, agentId ) {
     if (diffMins < 60) return `${diffMins} min ago`
     if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`
     if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`
-    return date.toLocaleDateString{ user, agentId }: { user?: any, agentId?: string }
+    return date.toLocaleDateString
   }
 
   const getActivityIcon = (type: string) => {
@@ -597,7 +597,7 @@ export function AgentDashboardPage({ user, agentId ) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-slate-500 font-medium">Total Sales</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">₹{totalSales.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</p>
+                <p className="text-2xl font-bold text-slate-900 mt-1">₹{totalSales.toLocaleString}</p>
                 <div className="flex items-center gap-1 mt-2 text-sm">
                   {salesGrowth >= 0 ? (
                     <ArrowUpRight size={14} className="text-emerald-500" />
@@ -620,7 +620,7 @@ export function AgentDashboardPage({ user, agentId ) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-slate-500 font-medium">Total Commission</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">₹{totalCommission.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</p>
+                <p className="text-2xl font-bold text-slate-900 mt-1">₹{totalCommission.toLocaleString}</p>
                 <div className="flex items-center gap-1 mt-2 text-sm">
                   {commissionGrowth >= 0 ? (
                     <ArrowUpRight size={14} className="text-emerald-500" />
@@ -669,7 +669,7 @@ export function AgentDashboardPage({ user, agentId ) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-slate-500 font-medium">Payouts Received</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">₹{totalPayouts.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</p>
+                <p className="text-2xl font-bold text-slate-900 mt-1">₹{totalPayouts.toLocaleString}</p>
                 <div className="flex items-center gap-1 mt-2 text-sm">
                   {payoutGrowth === 0 ? (
                     <>
@@ -707,7 +707,7 @@ export function AgentDashboardPage({ user, agentId ) {
                 {dailySales.map((day, i) => {
                   const height = maxDailySale > 0 ? (day.amount / maxDailySale) * 100 : 0
                   const isToday = i === dailySales.length - 1
-                  const dateLabel = new Date(day.date).getDate{ user, agentId }: { user?: any, agentId?: string }
+                  const dateLabel = new Date(day.date).getDate
                   return (
                     <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
                       <div
@@ -750,7 +750,7 @@ export function AgentDashboardPage({ user, agentId ) {
                   ) : null}
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-lg font-bold text-slate-900">₹{totalCommission.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</span>
+                  <span className="text-lg font-bold text-slate-900">₹{totalCommission.toLocaleString}</span>
                   <span className="text-[10px] text-slate-400">Total</span>
                 </div>
               </div>
@@ -766,7 +766,7 @@ export function AgentDashboardPage({ user, agentId ) {
                       <div className={`w-2 h-2 rounded-full ${colors[idx]}`} />
                       <span className="text-slate-600 truncate max-w-[120px]">{shop.shop_name}</span>
                     </div>
-                    <span className="font-medium text-slate-900">₹{shop.total_commission.toLocaleString{ user, agentId }: { user?: any, agentId?: string }} ({pct}%)</span>
+                    <span className="font-medium text-slate-900">₹{shop.total_commission.toLocaleString} ({pct}%)</span>
                   </div>
                 )
               }) : (
@@ -806,11 +806,11 @@ export function AgentDashboardPage({ user, agentId ) {
             <div className="mt-3 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Target</span>
-                <span className="font-semibold text-slate-900">₹{monthlyTarget.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</span>
+                <span className="font-semibold text-slate-900">₹{monthlyTarget.toLocaleString}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Achieved</span>
-                <span className="font-semibold text-slate-900">₹{monthlyAchieved.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</span>
+                <span className="font-semibold text-slate-900">₹{monthlyAchieved.toLocaleString}</span>
               </div>
               <div className="w-full bg-slate-100 rounded-full h-1.5">
                 <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${monthlyProgress}%` }} />
@@ -818,7 +818,7 @@ export function AgentDashboardPage({ user, agentId ) {
               <p className="text-[11px] text-slate-500">
                 {monthlyAchieved >= monthlyTarget
                   ? "🎉 Target achieved!"
-                  : `₹${(monthlyTarget - monthlyAchieved).toLocaleString{ user, agentId }: { user?: any, agentId?: string }} left to reach your target`}
+                  : `₹${(monthlyTarget - monthlyAchieved).toLocaleString} left to reach your target`}
               </p>
             </div>
           </Card>
@@ -881,9 +881,9 @@ export function AgentDashboardPage({ user, agentId ) {
                         <p className="text-xs text-slate-500">{shop.commission_rate}% commission rate</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold text-slate-900">₹{shop.total_sales.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</p>
+                        <p className="text-sm font-bold text-slate-900">₹{shop.total_sales.toLocaleString}</p>
                         <p className="text-xs text-emerald-500 flex items-center justify-end gap-0.5">
-                          <ArrowUpRight size={10} /> {shop.total_commission > 0 ? `₹${shop.total_commission.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}` : "No sales"}
+                          <ArrowUpRight size={10} /> {shop.total_commission > 0 ? `₹${shop.total_commission.toLocaleString}` : "No sales"}
                         </p>
                       </div>
                     </div>
@@ -966,13 +966,13 @@ export function AgentDashboardPage({ user, agentId ) {
                       <p className="text-sm text-slate-500">Rate: {shop.commission_rate}%</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-amber-600">₹{Number(shop.pending_commission || 0).toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</p>
+                      <p className="text-lg font-bold text-amber-600">₹{Number(shop.pending_commission || 0).toLocaleString}</p>
                       <p className="text-xs text-slate-400">pending</p>
                     </div>
                   </div>
                   <div className="mt-3 flex gap-4 text-sm text-slate-500">
-                    <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3" /> ₹{Number(shop.total_sales || 0).toLocaleString{ user, agentId }: { user?: any, agentId?: string }} sales</span>
-                    <span className="flex items-center gap-1"><Wallet className="h-3 w-3" /> ₹{Number(shop.total_commission || 0).toLocaleString{ user, agentId }: { user?: any, agentId?: string }} commission</span>
+                    <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3" /> ₹{Number(shop.total_sales || 0).toLocaleString} sales</span>
+                    <span className="flex items-center gap-1"><Wallet className="h-3 w-3" /> ₹{Number(shop.total_commission || 0).toLocaleString} commission</span>
                   </div>
                 </Card>
               ))}
@@ -986,7 +986,7 @@ export function AgentDashboardPage({ user, agentId ) {
             <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-900">
               <Receipt className="h-5 w-5" /> Sales Statement
             </h2>
-            <Button variant="outline" size="sm" onClick={{ user, agentId }: { user?: any, agentId?: string } => setShowSalesSection(!showSalesSection)} className="border-slate-200">
+            <Button variant="outline" size="sm" onClick={ => setShowSalesSection(!showSalesSection)} className="border-slate-200">
               {showSalesSection ? "Hide" : "Show"} Statement
             </Button>
           </div>
@@ -1024,11 +1024,11 @@ export function AgentDashboardPage({ user, agentId ) {
               <div className="flex gap-6 py-3 border-y border-slate-100">
                 <div>
                   <p className="text-xs text-slate-500">Total Sales</p>
-                  <p className="text-xl font-bold text-slate-900">₹{totalSales.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</p>
+                  <p className="text-xl font-bold text-slate-900">₹{totalSales.toLocaleString}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">Total Commission</p>
-                  <p className="text-xl font-bold text-green-600">₹{totalCommission.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</p>
+                  <p className="text-xl font-bold text-green-600">₹{totalCommission.toLocaleString}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">Records</p>
@@ -1055,10 +1055,10 @@ export function AgentDashboardPage({ user, agentId ) {
                     <tbody>
                       {salesRecords.map((sale) => (
                         <tr key={sale.id} className="border-b border-slate-50">
-                          <td className="py-2 text-slate-700">{new Date(sale.sale_date).toLocaleDateString{ user, agentId }: { user?: any, agentId?: string }}</td>
+                          <td className="py-2 text-slate-700">{new Date(sale.sale_date).toLocaleDateString}</td>
                           <td className="py-2 text-slate-700">{sale.shop_name}</td>
-                          <td className="py-2 text-right text-slate-700">₹{Number(sale.amount).toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</td>
-                          <td className="py-2 text-right text-green-600">₹{Number(sale.commission_amount).toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</td>
+                          <td className="py-2 text-right text-slate-700">₹{Number(sale.amount).toLocaleString}</td>
+                          <td className="py-2 text-right text-green-600">₹{Number(sale.commission_amount).toLocaleString}</td>
                           <td className="py-2 text-slate-400">{sale.notes || "-"}</td>
                         </tr>
                       ))}
@@ -1096,10 +1096,10 @@ export function AgentDashboardPage({ user, agentId ) {
                     {inv.status === "pending" ? (
                       inv.isReceived ? (
                         <>
-                          <Button variant="outline" size="sm" onClick={{ user, agentId }: { user?: any, agentId?: string } => handleInvitation(inv.id, "reject")} disabled={processingInvite === inv.id} className="border-slate-200">
+                          <Button variant="outline" size="sm" onClick={ => handleInvitation(inv.id, "reject")} disabled={processingInvite === inv.id} className="border-slate-200">
                             <XCircle className="h-4 w-4 mr-1" /> Decline
                           </Button>
-                          <Button size="sm" onClick={{ user, agentId }: { user?: any, agentId?: string } => handleInvitation(inv.id, "accept")} disabled={processingInvite === inv.id} className="bg-blue-600 hover:bg-blue-700">
+                          <Button size="sm" onClick={ => handleInvitation(inv.id, "accept")} disabled={processingInvite === inv.id} className="bg-blue-600 hover:bg-blue-700">
                             {processingInvite === inv.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
                             Accept
                           </Button>
@@ -1132,10 +1132,10 @@ export function AgentDashboardPage({ user, agentId ) {
               placeholder="Search by shop name, owner name, or phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch{ user, agentId }: { user?: any, agentId?: string }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch}
               className="flex-1 border-slate-200"
             />
-            <Button onClick={handleSearch} disabled={searching || !searchQuery.trim{ user, agentId }: { user?: any, agentId?: string }} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleSearch} disabled={searching || !searchQuery.trim} className="bg-blue-600 hover:bg-blue-700">
               {searching ? <Loader2 className="animate-spin" /> : <Search className="h-4 w-4" />}
               Search
             </Button>
@@ -1159,7 +1159,7 @@ export function AgentDashboardPage({ user, agentId ) {
                       <Clock className="h-4 w-4" /> Requested {shop.requested_rate}%
                     </span>
                   ) : (
-                    <Button size="sm" onClick={{ user, agentId }: { user?: any, agentId?: string } => setSelectedShop(shop)} className="bg-blue-600 hover:bg-blue-700">
+                    <Button size="sm" onClick={ => setSelectedShop(shop)} className="bg-blue-600 hover:bg-blue-700">
                       Request to Join <ArrowRight className="h-4 w-4 ml-1" />
                     </Button>
                   )}
@@ -1173,7 +1173,7 @@ export function AgentDashboardPage({ user, agentId ) {
         </div>
 
         {/* Request Dialog */}
-        <Dialog open={!!selectedShop} onOpenChange={{ user, agentId }: { user?: any, agentId?: string } => setSelectedShop(null)}>
+        <Dialog open={!!selectedShop} onOpenChange={ => setSelectedShop(null)}>
           <DialogContent className="bg-white border-slate-200">
             <DialogHeader>
               <DialogTitle className="text-slate-900">Request to Join {selectedShop?.name}</DialogTitle>

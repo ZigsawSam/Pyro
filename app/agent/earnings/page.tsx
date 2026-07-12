@@ -1,4 +1,4 @@
-import { EarningsOverviewPage } from "@/lib/auth-guard"
+import { verifyAgentAccess } from "@/lib/auth-guards"
 import { EarningsOverviewPage } from "./earnings-client"
 
 export default async function EarningsPage() {

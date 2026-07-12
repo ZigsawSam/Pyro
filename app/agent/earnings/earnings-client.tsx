@@ -9,25 +9,41 @@ import { CommissionTrendChart } from "@/components/dashboard/agent/CommissionTre
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 
-export function EarningsOverviewPage({ user, agentId ) {
-  const router = useRouter{ user, agentId }: { user?: any, agentId?: string }
-  const supabase = createAgentClient{ user, agentId }: { user?: any, agentId?: string }
-  const [agentId, setAgentId] = useState<number | null>(null)
+interface EarningsOverviewPageProps {
+  user?: any
+  agentId?: string
+}
+
+export function EarningsOverviewPage({ user, agentId: agentIdProp }: EarningsOverviewPageProps) {
+  const router = useRouter()
+  const supabase = createAgentClient()
+  
+  const agentId = agentIdProp ? parseInt(agentIdProp, 10) : null
+  
   const [agentName, setAgentName] = useState("")
   const [loading, setLoading] = useState(true)
   const [salesRecords, setSalesRecords] = useState<any[]>([])
   const [payouts, setPayouts] = useState<any[]>([])
 
-  useEffect({ user, agentId }: { user?: any, agentId?: string } => {
-    const checkAuth = async { user, agentId }: { user?: any, agentId?: string } => {
-      const { data: { user } } = await supabase.auth.getUser{ user, agentId }: { user?: any, agentId?: string }
-      const { data: agent } = await supabase.from("agents").select("id, name").eq("user_id", user.id).single{ user, agentId }: { user?: any, agentId?: string }
-      setAgentId(agent.id)
-      setAgentName(agent.name)
-      fetchData(agent.id)
+  useEffect(() => {
+    if (agentId) {
+      fetchAgentName(agentId)
+      fetchData(agentId)
     }
-    checkAuth{ user, agentId }: { user?: any, agentId?: string }
-  }, [router, supabase])
+  }, [agentId])
+
+  const fetchAgentName = async (id: number) => {
+    try {
+      const { data: agent } = await supabase
+        .from("agents")
+        .select("name")
+        .eq("id", id)
+        .single()
+      if (agent) setAgentName(agent.name)
+    } catch (e) {
+      console.error("fetchAgentName error:", e)
+    }
+  }
 
   const fetchData = async (id: number) => {
     setLoading(true)
@@ -38,11 +54,14 @@ export function EarningsOverviewPage({ user, agentId ) {
       ])
       setSalesRecords(sales || [])
       setPayouts(payoutData || [])
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const stats = useMemo({ user, agentId }: { user?: any, agentId?: string } => {
+  const stats = useMemo(() => {
     const totalEarned = salesRecords.reduce((sum, r) => sum + Number(r.commission_amount || 0), 0)
     const paidIds = new Set(payouts.filter((p: any) => p.amount_paid > 0).map((p: any) => p.sale_id))
     const processingIds = new Set(payouts.filter((p: any) => p.status === "processing").map((p: any) => p.sale_id))
@@ -52,12 +71,15 @@ export function EarningsOverviewPage({ user, agentId ) {
     return { totalEarned, pending, paid, processing }
   }, [salesRecords, payouts])
 
-  const dailyCommissions = useMemo({ user, agentId }: { user?: any, agentId?: string } => {
+  const dailyCommissions = useMemo(() => {
     const days: { date: string; amount: number }[] = []
     for (let i = 9; i >= 0; i--) {
-      const d = new Date{ user, agentId }: { user?: any, agentId?: string }; d.setDate(d.getDate{ user, agentId }: { user?: any, agentId?: string } - i)
-      const dateStr = d.toISOString{ user, agentId }: { user?: any, agentId?: string }.split("T")[0]
-      const dayTotal = salesRecords.filter((s: any) => s.sale_date?.startsWith(dateStr)).reduce((sum, s) => sum + Number(s.commission_amount || 0), 0)
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const dateStr = d.toISOString().split("T")[0]
+      const dayTotal = salesRecords
+        .filter((s: any) => s.sale_date?.startsWith(dateStr))
+        .reduce((sum, s) => sum + Number(s.commission_amount || 0), 0)
       days.push({ date: dateStr, amount: dayTotal })
     }
     return days
@@ -99,7 +121,7 @@ export function EarningsOverviewPage({ user, agentId ) {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-sm text-slate-500 font-medium">{stat.label}</p>
-                      <p className="text-2xl font-bold text-slate-900 mt-1">₹{stat.value.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</p>
+                      <p className="text-2xl font-bold text-slate-900 mt-1">₹{stat.value.toLocaleString()}</p>
                       {stat.trend && (
                         <p className="text-xs text-emerald-500 mt-1">↑ {stat.trend}% vs last month</p>
                       )}
@@ -122,10 +144,10 @@ export function EarningsOverviewPage({ user, agentId ) {
                     </div>
                     <div>
                       <p className="text-sm text-slate-500">Available for Payout</p>
-                      <p className="text-3xl font-bold text-slate-900">₹{stats.pending.toLocaleString{ user, agentId }: { user?: any, agentId?: string }}</p>
+                      <p className="text-3xl font-bold text-slate-900">₹{stats.pending.toLocaleString()}</p>
                     </div>
                   </div>
-                  <Button onClick={{ user, agentId }: { user?: any, agentId?: string } => router.push("/agent/earnings/payouts")} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Button onClick={() => router.push("/agent/earnings/payouts")} className="bg-blue-600 hover:bg-blue-700 text-white">
                     Go to Payouts <ArrowRight size={16} className="ml-1" />
                   </Button>
                 </div>
@@ -142,8 +164,11 @@ export function EarningsOverviewPage({ user, agentId ) {
                 { title: "Payouts", desc: "Track withdrawals", href: "/agent/earnings/payouts" },
                 { title: "Statements", desc: "Download reports", href: "/agent/earnings/statements" },
               ].map((link) => (
-                <Card key={link.title} className="p-5 bg-white border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={{ user, agentId }: { user?: any, agentId?: string } => router.push(link.href)}>
+                <Card
+                  key={link.title}
+                  className="p-5 bg-white border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => router.push(link.href)}
+                >
                   <h3 className="font-semibold text-slate-900 mb-1">{link.title}</h3>
                   <p className="text-sm text-slate-500">{link.desc}</p>
                 </Card>

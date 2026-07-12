@@ -1,4 +1,4 @@
-import { MyShopsPage } from "@/lib/auth-guard"
+import { verifyAgentAccess } from "@/lib/auth-guards"
 import { MyShopsPage } from "./shops-client"
 
 export default async function ShopsPage() {

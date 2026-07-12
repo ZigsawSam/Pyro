@@ -1,4 +1,4 @@
-import { AgentDashboardPage } from "@/lib/auth-guard"
+import { verifyAgentAccess } from "@/lib/auth-guards"
 import { AgentDashboardPage } from "./dashboard-client"
 
 export default async function DashboardPage() {

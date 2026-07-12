@@ -76,7 +76,6 @@ const mockMonthlyEarnings: MonthlyEarnings[] = [
 ]
 
 // ─── CSV Data Transformers ───────────────────────────────
-// All return Record<string, string | number>[] for type safety
 function getCommissionCsvData(records: CommissionRecord[]): Record<string, string | number>[] {
   return records.map((r) => ({
     Date: formatDate(r.date),
@@ -85,7 +84,7 @@ function getCommissionCsvData(records: CommissionRecord[]): Record<string, strin
     "Sales Amount": formatCurrency(r.salesAmount),
     Rate: `${r.commissionRate}%`,
     Commission: formatCurrency(r.commission),
-    Status: r.status.charAt(0).toUpperCase{ user, agentId }: { user?: any, agentId?: string } + r.status.slice(1),
+    Status: r.status.charAt(0).toUpperCase() + r.status.slice(1),
     "Payout Month": r.payoutMonth,
   }))
 }
@@ -112,11 +111,16 @@ function getMonthlyCsvData(months: MonthlyEarnings[]): Record<string, string | n
 }
 
 // ─── Component ───────────────────────────────────────────
-export function AgentReportsPage({ user, agentId ) {
+interface AgentReportsPageProps {
+  user?: any
+  agentId?: string
+}
+
+export function AgentReportsPage({ user, agentId }: AgentReportsPageProps) {
   const [activeTab, setActiveTab] = useState("commissions")
 
-  const handlePrint = { user, agentId }: { user?: any, agentId?: string } => {
-    window.print{ user, agentId }: { user?: any, agentId?: string }
+  const handlePrint = () => {
+    window.print()
   }
 
   const totalCommission = mockCommissions.reduce((sum, c) => sum + c.commission, 0)
@@ -148,7 +152,7 @@ export function AgentReportsPage({ user, agentId ) {
                   ? getShopCsvData(mockShopBreakdown)
                   : getMonthlyCsvData(mockMonthlyEarnings)
               }
-              filename={`agent-reports-${activeTab}-${new Date{ user, agentId }: { user?: any, agentId?: string }.toISOString{ user, agentId }: { user?: any, agentId?: string }.split("T")[0]}`}
+              filename={`agent-reports-${activeTab}-${new Date().toISOString().split("T")[0]}`}
             />
             <Button variant="outline" size="sm" onClick={handlePrint}>
               <Printer className="w-4 h-4 mr-2" />
@@ -219,7 +223,7 @@ export function AgentReportsPage({ user, agentId ) {
                 </div>
                 <CsvExportButton
                   data={getCommissionCsvData(mockCommissions)}
-                  filename={`commission-history-${new Date{ user, agentId }: { user?: any, agentId?: string }.toISOString{ user, agentId }: { user?: any, agentId?: string }.split("T")[0]}`}
+                  filename={`commission-history-${new Date().toISOString().split("T")[0]}`}
                   label="Export CSV"
                 />
               </CardHeader>
@@ -287,7 +291,7 @@ export function AgentReportsPage({ user, agentId ) {
                 </div>
                 <CsvExportButton
                   data={getShopCsvData(mockShopBreakdown)}
-                  filename={`shop-breakdown-${new Date{ user, agentId }: { user?: any, agentId?: string }.toISOString{ user, agentId }: { user?: any, agentId?: string }.split("T")[0]}`}
+                  filename={`shop-breakdown-${new Date().toISOString().split("T")[0]}`}
                   label="Export CSV"
                 />
               </CardHeader>
@@ -337,7 +341,7 @@ export function AgentReportsPage({ user, agentId ) {
                 </div>
                 <CsvExportButton
                   data={getMonthlyCsvData(mockMonthlyEarnings)}
-                  filename={`monthly-earnings-${new Date{ user, agentId }: { user?: any, agentId?: string }.toISOString{ user, agentId }: { user?: any, agentId?: string }.split("T")[0]}`}
+                  filename={`monthly-earnings-${new Date().toISOString().split("T")[0]}`}
                   label="Export CSV"
                 />
               </CardHeader>

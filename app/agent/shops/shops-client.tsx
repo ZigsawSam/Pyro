@@ -33,10 +33,17 @@ interface Shop {
   reject_reason?: string
 }
 
-export function MyShopsPage({ user, agentId ) {
-  const router = useRouter{ user, agentId }: { user?: any, agentId?: string }
-  const supabase = createAgentClient{ user, agentId }: { user?: any, agentId?: string }
-  const [agentId, setAgentId] = useState<number | null>(null)
+interface MyShopsPageProps {
+  user?: any
+  agentId?: string
+}
+
+export function MyShopsPage({ user, agentId: agentIdProp }: MyShopsPageProps) {
+  const router = useRouter()
+  const supabase = createAgentClient()
+  
+  const agentId = agentIdProp ? parseInt(agentIdProp, 10) : null
+  
   const [agentName, setAgentName] = useState("")
   const [activeTab, setActiveTab] = useState<TabType>("linked")
   const [loading, setLoading] = useState(true)
@@ -54,17 +61,25 @@ export function MyShopsPage({ user, agentId ) {
   const [requestMessage, setRequestMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
-  // Auth check
-  useEffect({ user, agentId }: { user?: any, agentId?: string } => {
-    const checkAuth = async { user, agentId }: { user?: any, agentId?: string } => {
-      const { data: { user } } = await supabase.auth.getUser{ user, agentId }: { user?: any, agentId?: string }
-      const { data: agent } = await supabase.from("agents").select("id, name").eq("user_id", user.id).single{ user, agentId }: { user?: any, agentId?: string }
-      setAgentId(agent.id)
-      setAgentName(agent.name)
-      fetchAllData(agent.id)
+  useEffect(() => {
+    if (agentId) {
+      fetchAgentName(agentId)
+      fetchAllData(agentId)
     }
-    checkAuth{ user, agentId }: { user?: any, agentId?: string }
-  }, [router, supabase])
+  }, [agentId])
+
+  const fetchAgentName = async (id: number) => {
+    try {
+      const { data: agent } = await supabase
+        .from("agents")
+        .select("name")
+        .eq("id", id)
+        .single()
+      if (agent) setAgentName(agent.name)
+    } catch (e) {
+      console.error("fetchAgentName error:", e)
+    }
+  }
 
   const fetchAllData = async (id: number) => {
     setLoading(true)
@@ -120,7 +135,9 @@ export function MyShopsPage({ user, agentId ) {
       }))
 
       setLinkedShops(formatted)
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const fetchPendingShops = async (id: number) => {
@@ -144,7 +161,9 @@ export function MyShopsPage({ user, agentId ) {
       }))
 
       setPendingShops(formatted)
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const fetchRejectedShops = async (id: number) => {
@@ -169,11 +188,13 @@ export function MyShopsPage({ user, agentId ) {
       }))
 
       setRejectedShops(formatted)
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e)
+    }
   }
 
-  const handleDiscoverSearch = async { user, agentId }: { user?: any, agentId?: string } => {
-    if (!agentId || !searchQuery.trim{ user, agentId }: { user?: any, agentId?: string }) return
+  const handleDiscoverSearch = async () => {
+    if (!agentId || !searchQuery.trim()) return
     setSearching(true)
     try {
       const { data: shops } = await supabase
@@ -209,11 +230,14 @@ export function MyShopsPage({ user, agentId ) {
         }))
 
       setDiscoverShops(formatted)
-    } catch (e) { console.error(e) }
-    finally { setSearching(false) }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSearching(false)
+    }
   }
 
-  const handleRequestPartnership = async { user, agentId }: { user?: any, agentId?: string } => {
+  const handleRequestPartnership = async () => {
     if (!selectedShop || !requestRate || !agentId) return
     setSubmitting(true)
     try {
@@ -246,40 +270,43 @@ export function MyShopsPage({ user, agentId ) {
     try {
       await supabase
         .from("agent_link_requests")
-        .delete{ user, agentId }: { user?: any, agentId?: string }
+        .delete()
         .eq("agent_id", agentId)
         .eq("shop_id", shopId)
         .eq("status", "pending")
       fetchPendingShops(agentId)
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const handleRequestAgain = (shopId: number) => {
     const shop = rejectedShops.find((s) => s.id === shopId)
     if (shop) {
       setSelectedShop(shop)
-      setRequestRate(shop.requested_rate?.toString{ user, agentId }: { user?: any, agentId?: string } || "")
+      setRequestRate(shop.requested_rate?.toString() || "")
     }
   }
 
-  const getCurrentShops = { user, agentId }: { user?: any, agentId?: string } => {
+  const getCurrentShops = () => {
     switch (activeTab) {
       case "linked": return linkedShops
       case "pending": return pendingShops
       case "rejected": return rejectedShops
       case "discover": return discoverShops
+      default: return []
     }
   }
 
-  const allCities = useCallback({ user, agentId }: { user?: any, agentId?: string } => {
-    const cities = new Set<string>{ user, agentId }: { user?: any, agentId?: string }
+  const allCities = useCallback(() => {
+    const cities = new Set<string>()
     linkedShops.forEach((s) => s.city && cities.add(s.city))
     pendingShops.forEach((s) => s.city && cities.add(s.city))
     rejectedShops.forEach((s) => s.city && cities.add(s.city))
-    return Array.from(cities).sort{ user, agentId }: { user?: any, agentId?: string }
-  }, [linkedShops, pendingShops, rejectedShops]){ user, agentId }: { user?: any, agentId?: string }
+    return Array.from(cities).sort()
+  }, [linkedShops, pendingShops, rejectedShops])
 
-  const filteredShops = getCurrentShops{ user, agentId }: { user?: any, agentId?: string }.filter((shop) => {
+  const filteredShops = getCurrentShops().filter((shop) => {
     if (!cityFilter) return true
     return shop.city === cityFilter
   })
@@ -324,7 +351,7 @@ export function MyShopsPage({ user, agentId ) {
             {tabs.map((tab) => (
               <button
                 key={tab.key}
-                onClick={{ user, agentId }: { user?: any, agentId?: string } => setActiveTab(tab.key)}
+                onClick={() => setActiveTab(tab.key)}
                 className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors relative ${
                   activeTab === tab.key
                     ? "text-blue-600 bg-blue-50"
@@ -356,7 +383,7 @@ export function MyShopsPage({ user, agentId ) {
             searching={searching}
             cityFilter={cityFilter}
             onCityFilterChange={setCityFilter}
-            cities={allCities}
+            cities={allCities()}
           />
         )}
 
@@ -368,7 +395,7 @@ export function MyShopsPage({ user, agentId ) {
         ) : filteredShops.length === 0 ? (
           <ShopEmptyState
             tab={activeTab}
-            onAction={{ user, agentId }: { user?: any, agentId?: string } => {
+            onAction={() => {
               if (activeTab === "linked") setActiveTab("discover")
               if (activeTab === "discover") {
                 setSearchQuery("")
@@ -406,7 +433,7 @@ export function MyShopsPage({ user, agentId ) {
         )}
 
         {/* Request Dialog */}
-        <Dialog open={!!selectedShop} onOpenChange={{ user, agentId }: { user?: any, agentId?: string } => setSelectedShop(null)}>
+        <Dialog open={!!selectedShop} onOpenChange={() => setSelectedShop(null)}>
           <DialogContent className="bg-white border-slate-200">
             <DialogHeader>
               <DialogTitle className="text-slate-900">
