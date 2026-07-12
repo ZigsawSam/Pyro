@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useMemo } from "react"  // ← FIXED: added useMemo
+import { useEffect, useState, useCallback, useMemo } from "react"
 import {
   Users,
   Search,
@@ -99,13 +99,13 @@ export function ShopStaffPage({ shopId: shopIdProp, user }: ShopStaffPageProps) 
   const [payoutsMap, setPayoutsMap] = useState<Record<number, number>>({})
 
   /* ── Data Fetching ── */
-    const fetchStaff = useCallback(async () => {
+  const fetchStaff = useCallback(async () => {
     if (isNaN(shopId)) return
     setLoading(true)
     try {
       const { data: staffData, error: staffError } = await supabase
         .from("staff")
-        .select("id, name, phone, role, salary_type, base_salary, working_hours_per_day, overtime_rate, is_active, account_name, account_number, bank_name, ifsc_code, upi_id")
+        .select("id, name, phone, role, salary_type, base_salary, working_hours_per_day, overtime_rate, is_active, account_name, account_number, bank_name, ifsc_code, upi_id, joining_date, email, department, employee_id")
         .eq("shop_id", shopId)
 
       if (staffError) throw staffError
@@ -405,7 +405,7 @@ export function ShopStaffPage({ shopId: shopIdProp, user }: ShopStaffPageProps) 
                             variant="outline"
                             className="text-[10px] border-slate-200 text-slate-500 bg-slate-50"
                           >
-                            {member.role || "General"}
+                            {member.department || member.role || "General"}
                           </Badge>
                         </td>
 
