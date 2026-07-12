@@ -4,8 +4,9 @@ import { ShopSalesPage } from "./sales-client"
 export default async function SalesPage({
   params,
 }: {
-  params: { shopId: string }
+  params: Promise<{ shopId: string }>
 }) {
-  const { user } = await verifyShopOwnership(params.shopId)
-  return <ShopSalesPage shopId={params.shopId} user={user} />
+  const { shopId } = await params
+  const { user } = await verifyShopOwnership(shopId)
+  return <ShopSalesPage shopId={shopId} user={user} />
 }

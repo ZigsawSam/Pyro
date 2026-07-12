@@ -4,8 +4,9 @@ import { InventoryPage } from "./inventory-client"
 export default async function InventoryServerPage({
   params,
 }: {
-  params: { shopId: string }
+  params: Promise<{ shopId: string }>
 }) {
-  const { user } = await verifyShopOwnership(params.shopId)
-  return <InventoryPage shopId={params.shopId} user={user} />
+  const { shopId } = await params
+  const { user } = await verifyShopOwnership(shopId)
+  return <InventoryPage shopId={shopId} user={user} />
 }

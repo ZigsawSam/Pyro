@@ -4,8 +4,9 @@ import { ShopPayoutsPage } from "./payouts-client"
 export default async function PayoutsPage({
   params,
 }: {
-  params: { shopId: string }
+  params: Promise<{ shopId: string }>
 }) {
-  const { user } = await verifyShopOwnership(params.shopId)
-  return <ShopPayoutsPage shopId={params.shopId} user={user} />
+  const { shopId } = await params
+  const { user } = await verifyShopOwnership(shopId)
+  return <ShopPayoutsPage shopId={shopId} user={user} />
 }

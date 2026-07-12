@@ -4,8 +4,9 @@ import { ShopAgentsPage } from "./agents-client"
 export default async function AgentsPage({
   params,
 }: {
-  params: { shopId: string }
+  params: Promise<{ shopId: string }>
 }) {
-  const { user } = await verifyShopOwnership(params.shopId)
-  return <ShopAgentsPage shopId={params.shopId} user={user} />
+  const { shopId } = await params
+  const { user } = await verifyShopOwnership(shopId)
+  return <ShopAgentsPage shopId={shopId} user={user} />
 }

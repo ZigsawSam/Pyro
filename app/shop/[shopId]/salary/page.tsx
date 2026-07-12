@@ -4,8 +4,9 @@ import { ShopSalaryPage } from "./salary-client"
 export default async function SalaryPage({
   params,
 }: {
-  params: { shopId: string }
+  params: Promise<{ shopId: string }>
 }) {
-  const { user } = await verifyShopOwnership(params.shopId)
-  return <ShopSalaryPage shopId={params.shopId} user={user} />
+  const { shopId } = await params
+  const { user } = await verifyShopOwnership(shopId)
+  return <ShopSalaryPage shopId={shopId} user={user} />
 }
