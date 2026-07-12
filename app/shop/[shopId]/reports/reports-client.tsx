@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,312 +9,598 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CsvExportButton } from "@/components/reports/csv-export-button"
 import { formatCurrency, formatDate } from "@/lib/csv-export"
 import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts"
+import {
   Printer,
   FileText,
   TrendingUp,
   Users,
   ShoppingCart,
   Calendar,
+  Download,
+  Sparkles,
 } from "lucide-react"
 
 // ─── Types ───────────────────────────────────────────────
 interface SalesRecord {
   id: string
-  date: string
-  invoiceNo: string
-  customer: string
-  agent: string
+  sale_date: string
+  invoice_number: string
+  customer_name: string | null
+  agent_id: string | null
   amount: number
-  commission: number
-  commissionRate: number
-  status: "completed" | "pending" | "reversed"
+  commission_rate: number
+  commission_amount: number
+  status: "confirmed" | "pending" | "reversed"
+  shop_id: string
 }
 
-interface AgentPerformance {
-  agentId: string
-  agentName: string
-  totalSales: number
-  totalCommission: number
-  transactions: number
-  avgCommissionRate: number
+interface PayoutRecord {
+  id: string
+  payment_date: string
+  amount: number
+  status: "paid" | "pending"
+  recipient_type: "agent" | "staff"
+  recipient_id: string
+  shop_id: string
+  receipt_number: string
+  payment_method: string
+  remarks: string | null
 }
 
-interface MonthlySummary {
-  month: string
-  totalSales: number
-  totalCommission: number
-  transactionCount: number
-  activeAgents: number
+interface SalaryRecord {
+  id: string
+  shop_id: string
+  payroll_month: string
+  net_salary: number
+  status: "paid" | "pending"
 }
 
-// ─── Mock Data ───────────────────────────────────────────
-const mockSales: SalesRecord[] = [
-  { id: "1", date: "2024-06-28", invoiceNo: "INV-001", customer: "Rajesh Kumar", agent: "Rahul Sharma", amount: 45000, commission: 2250, commissionRate: 5, status: "completed" },
-  { id: "2", date: "2024-06-27", invoiceNo: "INV-002", customer: "Priya Patel", agent: "Amit Singh", amount: 32000, commission: 2240, commissionRate: 7, status: "completed" },
-  { id: "3", date: "2024-06-26", invoiceNo: "INV-003", customer: "Suresh Gupta", agent: "Rahul Sharma", amount: 28000, commission: 1260, commissionRate: 4.5, status: "pending" },
-  { id: "4", date: "2024-06-25", invoiceNo: "INV-004", customer: "Neha Verma", agent: "Priya Mehta", amount: 55000, commission: 2750, commissionRate: 5, status: "completed" },
-  { id: "5", date: "2024-06-24", invoiceNo: "INV-005", customer: "Vikram Rao", agent: "Amit Singh", amount: 18000, commission: 900, commissionRate: 5, status: "reversed" },
-  { id: "6", date: "2024-06-23", invoiceNo: "INV-006", customer: "Anita Desai", agent: "Rahul Sharma", amount: 62000, commission: 3100, commissionRate: 5, status: "completed" },
-  { id: "7", date: "2024-06-22", invoiceNo: "INV-007", customer: "Kiran Shah", agent: "Priya Mehta", amount: 35000, commission: 1750, commissionRate: 5, status: "completed" },
-  { id: "8", date: "2024-06-21", invoiceNo: "INV-008", customer: "Deepak Joshi", agent: "Amit Singh", amount: 41000, commission: 2050, commissionRate: 5, status: "pending" },
-]
-
-const mockAgentPerformance: AgentPerformance[] = [
-  { agentId: "1", agentName: "Rahul Sharma", totalSales: 135000, totalCommission: 6610, transactions: 3, avgCommissionRate: 4.9 },
-  { agentId: "2", agentName: "Amit Singh", totalSales: 91000, totalCommission: 5190, transactions: 3, avgCommissionRate: 5.7 },
-  { agentId: "3", agentName: "Priya Mehta", totalSales: 90000, totalCommission: 4500, transactions: 2, avgCommissionRate: 5.0 },
-]
-
-const mockMonthly: MonthlySummary[] = [
-  { month: "Jan 2024", totalSales: 320000, totalCommission: 16000, transactionCount: 45, activeAgents: 3 },
-  { month: "Feb 2024", totalSales: 280000, totalCommission: 14000, transactionCount: 38, activeAgents: 3 },
-  { month: "Mar 2024", totalSales: 410000, totalCommission: 20500, transactionCount: 52, activeAgents: 4 },
-  { month: "Apr 2024", totalSales: 350000, totalCommission: 17500, transactionCount: 48, activeAgents: 3 },
-  { month: "May 2024", totalSales: 390000, totalCommission: 19500, transactionCount: 55, activeAgents: 4 },
-  { month: "Jun 2024", totalSales: 316000, totalCommission: 15800, transactionCount: 42, activeAgents: 3 },
-]
-
-// ─── CSV Data Transformers ───────────────────────────────
-// All return Record<string, string | number>[] for type safety
-function getSalesCsvData(records: SalesRecord[]): Record<string, string | number>[] {
-  return records.map((r) => ({
-    Date: formatDate(r.date),
-    "Invoice No": r.invoiceNo,
-    Customer: r.customer,
-    Agent: r.agent,
-    Amount: formatCurrency(r.amount),
-    "Commission Rate": `${r.commissionRate}%`,
-    Commission: formatCurrency(r.commission),
-    Status: r.status.charAt(0).toUpperCase() + r.status.slice(1),
-  }))
+interface AgentRecord {
+  id: string
+  name: string
 }
 
-function getAgentCsvData(agents: AgentPerformance[]): Record<string, string | number>[] {
-  return agents.map((a) => ({
-    "Agent Name": a.agentName,
-    "Total Sales": formatCurrency(a.totalSales),
-    "Total Commission": formatCurrency(a.totalCommission),
-    Transactions: a.transactions,
-    "Avg Commission Rate": `${a.avgCommissionRate}%`,
-  }))
-}
-
-function getMonthlyCsvData(months: MonthlySummary[]): Record<string, string | number>[] {
-  return months.map((m) => ({
-    Month: m.month,
-    "Total Sales": formatCurrency(m.totalSales),
-    "Total Commission": formatCurrency(m.totalCommission),
-    Transactions: m.transactionCount,
-    "Active Agents": m.activeAgents,
-  }))
+interface ShopRecord {
+  id: string
+  currency: string
 }
 
 // ─── Component ───────────────────────────────────────────
-export function ShopReportsPage({ shopId, user }: { shopId: string, user?: any }) {
+export function ShopReportsPage({ shopId, user }: { shopId: string; user?: any }) {
+  const supabase = createShopClient()
   const [activeTab, setActiveTab] = useState("sales")
+  const [startDate, setStartDate] = useState("2026-06-01")
+  const [endDate, setEndDate] = useState("2026-07-31")
 
+  // ─── Data State ────────────────────────────────────────
+  const [sales, setSales] = useState<SalesRecord[]>([])
+  const [payouts, setPayouts] = useState<PayoutRecord[]>([])
+  const [salaries, setSalaries] = useState<SalaryRecord[]>([])
+  const [agents, setAgents] = useState<AgentRecord[]>([])
+  const [shop, setShop] = useState<ShopRecord | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const isShop = user?.role === "shop" || true // default to shop view
+  const currencySymbol = shop?.currency === "INR" ? "₹" : "$"
+
+  // ─── Fetch Data from Supabase ──────────────────────────
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+
+      const [salesRes, payoutsRes, salariesRes, agentsRes, shopRes] = await Promise.all([
+        supabase
+          .from("sales")
+          .select("*")
+          .eq("shop_id", shopId)
+          .gte("sale_date", startDate)
+          .lte("sale_date", endDate)
+          .order("sale_date", { ascending: false }),
+        supabase
+          .from("payouts")
+          .select("*")
+          .eq("shop_id", shopId)
+          .gte("payment_date", startDate)
+          .lte("payment_date", endDate),
+        supabase
+          .from("salaries")
+          .select("*")
+          .eq("shop_id", shopId)
+          .gte("payroll_month", startDate.substring(0, 7))
+          .lte("payroll_month", endDate.substring(0, 7)),
+        supabase.from("agents").select("id, name"),
+        supabase.from("shops").select("id, currency").eq("id", shopId).single(),
+      ])
+
+      if (salesRes.data) setSales(salesRes.data as SalesRecord[])
+      if (payoutsRes.data) setPayouts(payoutsRes.data as PayoutRecord[])
+      if (salariesRes.data) setSalaries(salariesRes.data as SalaryRecord[])
+      if (agentsRes.data) setAgents(agentsRes.data as AgentRecord[])
+      if (shopRes.data) setShop(shopRes.data as ShopRecord)
+
+      setLoading(false)
+    }
+
+    fetchData()
+  }, [supabase, shopId, startDate, endDate])
+
+  // ─── Computed Totals ───────────────────────────────────
+  const totalRevenue = useMemo(
+    () => sales.filter((s) => s.status === "confirmed").reduce((sum, s) => sum + s.amount, 0),
+    [sales]
+  )
+  const totalCommission = useMemo(
+    () => sales.filter((s) => s.status === "confirmed").reduce((sum, s) => sum + s.commission_amount, 0),
+    [sales]
+  )
+  const totalDisbursedPayouts = useMemo(
+    () => payouts.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount, 0),
+    [payouts]
+  )
+  const totalPayrollCost = useMemo(
+    () => payouts.filter((p) => p.recipient_type === "staff" && p.status === "paid").reduce((sum, p) => sum + p.amount, 0),
+    [payouts]
+  )
+  const completedCount = useMemo(() => sales.filter((s) => s.status === "confirmed").length, [sales])
+  const pendingCount = useMemo(() => sales.filter((s) => s.status === "pending").length, [sales])
+
+  // ─── Chart Datasets ────────────────────────────────────
+  const salesTrendData = useMemo(() => {
+    const salesByDate: Record<string, number> = {}
+    sales.forEach((s) => {
+      if (s.status === "confirmed") {
+        salesByDate[s.sale_date] = (salesByDate[s.sale_date] || 0) + s.amount
+      }
+    })
+    return Object.keys(salesByDate)
+      .sort()
+      .map((d) => ({ date: d, "Sales Volume": salesByDate[d] }))
+  }, [sales])
+
+  const agentRevenue = useMemo(() => {
+    const map: Record<string, { name: string; revenue: number; commission: number }> = {}
+    sales.forEach((s) => {
+      if (s.status === "confirmed" && s.agent_id) {
+        const ag = agents.find((a) => a.id === s.agent_id)
+        const name = ag?.name || "Unknown Agent"
+        if (!map[s.agent_id]) map[s.agent_id] = { name, revenue: 0, commission: 0 }
+        map[s.agent_id].revenue += s.amount
+        map[s.agent_id].commission += s.commission_amount
+      }
+    })
+    return Object.values(map).map((v) => ({
+      name: v.name,
+      "Sales Revenue": v.revenue,
+      "Commission Paid": v.commission,
+    }))
+  }, [sales, agents])
+
+  const monthlyExpenses = useMemo(() => {
+    const months = new Set<string>()
+    sales.forEach((s) => months.add(s.sale_date.substring(0, 7)))
+    salaries.forEach((s) => months.add(s.payroll_month))
+    return Array.from(months)
+      .sort()
+      .map((m) => {
+        const label = new Date(m + "-01").toLocaleDateString("en-IN", { month: "short", year: "numeric" })
+        return {
+          month: label,
+          "Commission Costs": sales
+            .filter((s) => s.sale_date.startsWith(m) && s.status === "confirmed")
+            .reduce((sum, s) => sum + s.commission_amount, 0),
+          "Staff Payroll Costs": salaries
+            .filter((s) => s.payroll_month === m && s.status === "paid")
+            .reduce((sum, s) => sum + s.net_salary, 0),
+        }
+      })
+  }, [sales, salaries])
+
+  // ─── CSV Export ────────────────────────────────────────
+  const getSalesCsvData = (): Record<string, string | number>[] => {
+    return sales.map((s) => {
+      const ag = agents.find((a) => a.id === s.agent_id)
+      return {
+        Date: formatDate(s.sale_date),
+        "Invoice No": s.invoice_number,
+        Customer: s.customer_name || "Counter",
+        Agent: ag?.name || "Direct",
+        Amount: formatCurrency(s.amount),
+        "Commission Rate": `${s.commission_rate}%`,
+        Commission: formatCurrency(s.commission_amount),
+        Status: s.status.charAt(0).toUpperCase() + s.status.slice(1),
+      }
+    })
+  }
+
+  const getAgentCsvData = (): Record<string, string | number>[] => {
+    return Object.values(
+      sales.reduce((acc, s) => {
+        if (s.status !== "confirmed" || !s.agent_id) return acc
+        const ag = agents.find((a) => a.id === s.agent_id)
+        const name = ag?.name || "Unknown"
+        if (!acc[name]) acc[name] = { name, totalSales: 0, totalCommission: 0, transactions: 0 }
+        acc[name].totalSales += s.amount
+        acc[name].totalCommission += s.commission_amount
+        acc[name].transactions += 1
+        return acc
+      }, {} as Record<string, any>)
+    ).map((a: any) => ({
+      "Agent Name": a.name,
+      "Total Sales": formatCurrency(a.totalSales),
+      "Total Commission": formatCurrency(a.totalCommission),
+      Transactions: a.transactions,
+      "Avg Commission Rate": `${a.totalSales > 0 ? ((a.totalCommission / a.totalSales) * 100).toFixed(1) : "0.0"}%`,
+    }))
+  }
+
+  const getMonthlyCsvData = (): Record<string, string | number>[] => {
+    return monthlyExpenses.map((m) => {
+      const monthKey = new Date(m.month).toISOString().slice(0, 7)
+      const salesInMonth = sales.filter((s) => s.sale_date.startsWith(monthKey) && s.status === "confirmed")
+      const agentsInMonth = new Set(salesInMonth.map((s) => s.agent_id)).size
+      const totalSalesMonth = salesInMonth.reduce((sum, s) => sum + s.amount, 0)
+      const totalCommMonth = salesInMonth.reduce((sum, s) => sum + s.commission_amount, 0)
+      return {
+        Month: m.month,
+        "Total Sales": formatCurrency(totalSalesMonth),
+        "Total Commission": formatCurrency(totalCommMonth),
+        Transactions: salesInMonth.length,
+        "Active Agents": agentsInMonth,
+      }
+    })
+  }
+
+  const csvData =
+    activeTab === "sales"
+      ? getSalesCsvData()
+      : activeTab === "agents"
+      ? getAgentCsvData()
+      : getMonthlyCsvData()
+
+  const csvFilename = `shop-reports-${activeTab}-${new Date().toISOString().split("T")[0]}`
+
+  // ─── Print ─────────────────────────────────────────────
   const handlePrint = () => {
     window.print()
   }
 
-  const totalSales = mockSales.reduce((sum, s) => sum + s.amount, 0)
-  const totalCommission = mockSales.reduce((sum, s) => sum + s.commission, 0)
-  const completedCount = mockSales.filter((s) => s.status === "completed").length
-  const pendingCount = mockSales.filter((s) => s.status === "pending").length
+  // ─── Loading State ─────────────────────────────────────
+  if (loading) {
+    return (
+      <MainLayout title="Reports & Analytics">
+        <div className="flex items-center justify-center h-96">
+          <div className="animate-pulse text-slate-500 font-mono text-sm">Loading analytics data...</div>
+        </div>
+      </MainLayout>
+    )
+  }
 
+  // ─── Render ────────────────────────────────────────────
   return (
     <MainLayout title="Reports & Analytics">
       <div className="space-y-6">
-        {/* Header Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        {/* ═══ Header ═══ */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 print:hidden">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Reports & Analytics</h2>
-            <p className="text-muted-foreground">
-              Generate, export, and analyze your business performance data.
-            </p>
+            <h2 className="text-2xl font-bold tracking-tight text-white">Reports & Analytics</h2>
+            <p className="text-slate-400 text-sm">Generate, export, and analyze your business performance data.</p>
           </div>
-          <div className="flex items-center gap-2 print:hidden">
-            <CsvExportButton
-              data={
-                activeTab === "sales"
-                  ? getSalesCsvData(mockSales)
-                  : activeTab === "agents"
-                  ? getAgentCsvData(mockAgentPerformance)
-                  : getMonthlyCsvData(mockMonthly)
-              }
-              filename={`shop-reports-${activeTab}-${new Date().toISOString().split("T")[0]}`}
-            />
-            <Button variant="outline" size="sm" onClick={handlePrint}>
+          <div className="flex items-center gap-2">
+            {/* Date Range */}
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-2 rounded-xl">
+              <span className="text-xs text-slate-500 font-medium font-mono">Date:</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-slate-950 text-xs text-slate-200 border border-slate-800 rounded px-2 outline-none w-28"
+              />
+              <span className="text-xs text-slate-600">to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-slate-950 text-xs text-slate-200 border border-slate-800 rounded px-2 outline-none w-28"
+              />
+            </div>
+
+            <CsvExportButton data={csvData} filename={csvFilename} />
+            <Button variant="outline" size="sm" onClick={handlePrint} className="border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800">
               <Printer className="w-4 h-4 mr-2" />
               Print
             </Button>
           </div>
         </div>
 
-        {/* Summary Cards */}
+        {/* ═══ Summary Cards ═══ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
+          <Card className="bg-slate-900 border-slate-800/80">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Sales</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-[10px] font-mono tracking-wider text-slate-500 uppercase">Gross Sales Revenue</CardTitle>
+              <ShoppingCart className="h-4 w-4 text-slate-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(totalSales)}</div>
-              <p className="text-xs text-muted-foreground">{mockSales.length} transactions</p>
+              <div className="text-2xl font-bold text-white">{currencySymbol}{totalRevenue.toLocaleString("en-IN")}</div>
+              <p className="text-[10px] text-slate-400 mt-1 font-mono">{sales.length} confirmed sales logged</p>
             </CardContent>
           </Card>
-          <Card>
+
+          <Card className="bg-slate-900 border-slate-800/80">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Commission</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-[10px] font-mono tracking-wider text-slate-500 uppercase">Commission Volume</CardTitle>
+              <TrendingUp className="h-4 w-4 text-emerald-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(totalCommission)}</div>
-              <p className="text-xs text-muted-foreground">
-                {((totalCommission / totalSales) * 100).toFixed(1)}% avg rate
+              <div className="text-2xl font-bold text-emerald-400">{currencySymbol}{totalCommission.toLocaleString("en-IN")}</div>
+              <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                {((totalCommission / Math.max(1, totalRevenue)) * 100).toFixed(1)}% avg commission rate
               </p>
             </CardContent>
           </Card>
-          <Card>
+
+          <Card className="bg-slate-900 border-slate-800/80">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
-              <FileText className="h-4 w-4 text-emerald-600" />
+              <CardTitle className="text-[10px] font-mono tracking-wider text-slate-500 uppercase">Completed</CardTitle>
+              <FileText className="h-4 w-4 text-emerald-400" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-emerald-600">{completedCount}</div>
-              <p className="text-xs text-muted-foreground">Successful transactions</p>
+              <p className="text-[10px] text-slate-400 mt-1 font-mono">Successful transactions</p>
             </CardContent>
           </Card>
-          <Card>
+
+          <Card className="bg-slate-900 border-slate-800/80">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
-              <Calendar className="h-4 w-4 text-amber-600" />
+              <CardTitle className="text-[10px] font-mono tracking-wider text-slate-500 uppercase">
+                {isShop ? "Staff Payroll Costs" : "Outstanding Balance"}
+              </CardTitle>
+              {isShop ? <Users className="h-4 w-4 text-indigo-400" /> : <Calendar className="h-4 w-4 text-yellow-400" />}
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-amber-600">{pendingCount}</div>
-              <p className="text-xs text-muted-foreground">Awaiting approval</p>
+              <div className={`text-2xl font-bold ${isShop ? "text-white" : "text-yellow-400"}`}>
+                {currencySymbol}
+                {(isShop ? totalPayrollCost : totalCommission - totalDisbursedPayouts).toLocaleString("en-IN")}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                {isShop ? "Approved salaries settled" : "Commission receivable"}
+              </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Report Tabs */}
+        {/* ═══ Tabs ═══ */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="print:hidden">
-            <TabsTrigger value="sales">Sales Ledger</TabsTrigger>
-            <TabsTrigger value="agents">Agent Performance</TabsTrigger>
-            <TabsTrigger value="monthly">Monthly Summary</TabsTrigger>
+          <TabsList className="print:hidden bg-slate-900 border border-slate-800">
+            <TabsTrigger value="sales" className="data-[state=active]:bg-slate-800 data-[state=active]:text-emerald-400">Sales Ledger</TabsTrigger>
+            <TabsTrigger value="agents" className="data-[state=active]:bg-slate-800 data-[state=active]:text-emerald-400">Agent Performance</TabsTrigger>
+            <TabsTrigger value="monthly" className="data-[state=active]:bg-slate-800 data-[state=active]:text-emerald-400">Monthly Summary</TabsTrigger>
           </TabsList>
 
-          {/* Sales Ledger Tab */}
-          <TabsContent value="sales" className="space-y-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+          {/* ─── Sales Ledger Tab ─── */}
+          <TabsContent value="sales" className="space-y-6">
+            {/* Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="bg-slate-900 border-slate-800">
+                <CardHeader className="border-b border-slate-800/60 pb-3">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-xs font-bold text-slate-200 uppercase tracking-wider">Sales Volume Timeline</CardTitle>
+                    <span className="text-[10px] font-mono text-emerald-400">Daily aggregate trend</span>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="h-64">
+                    {salesTrendData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={salesTrendData} margin={{ left: -10, right: 10, top: 10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis dataKey="date" stroke="#64748b" fontSize={9} />
+                          <YAxis stroke="#64748b" fontSize={9} />
+                          <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "8px" }} />
+                          <Legend verticalAlign="top" height={36} iconType="circle" />
+                          <Line type="monotone" dataKey="Sales Volume" stroke="#10b981" strokeWidth={2.5} activeDot={{ r: 6 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-slate-600 font-mono">
+                        No verified sales data in this date range.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-slate-900 border-slate-800">
+                <CardHeader className="border-b border-slate-800/60 pb-3">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-xs font-bold text-slate-200 uppercase tracking-wider">Agent Performance Contribution</CardTitle>
+                    <span className="text-[10px] font-mono text-emerald-400">B2B sales channel</span>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="h-64">
+                    {agentRevenue.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={agentRevenue} margin={{ left: -10, right: 10, top: 10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis dataKey="name" stroke="#64748b" fontSize={9} />
+                          <YAxis stroke="#64748b" fontSize={9} />
+                          <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "8px" }} />
+                          <Legend verticalAlign="top" height={36} iconType="circle" />
+                          <Bar dataKey="Sales Revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Commission Paid" fill="#10b981" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-slate-600 font-mono">
+                        No active reseller metrics recorded.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Sales Table */}
+            <Card className="bg-slate-900 border-slate-800 overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between border-b border-slate-800/60">
                 <div>
-                  <CardTitle>Sales Ledger Report</CardTitle>
-                  <CardDescription>Complete transaction history with commission breakdown</CardDescription>
+                  <CardTitle className="text-xs font-bold text-slate-200 uppercase tracking-wider">Sales Ledger Report</CardTitle>
+                  <CardDescription className="text-[10px] text-slate-500">Complete transaction history with commission breakdown</CardDescription>
                 </div>
-                <CsvExportButton
-                  data={getSalesCsvData(mockSales)}
-                  filename={`sales-ledger-${new Date().toISOString().split("T")[0]}`}
-                  label="Export Sales CSV"
-                />
+                <CsvExportButton data={getSalesCsvData()} filename={`sales-ledger-${new Date().toISOString().split("T")[0]}`} label="Export Sales CSV" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Invoice</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Customer</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Agent</th>
-                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Amount</th>
-                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Commission</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Status</th>
+                      <tr className="border-b border-slate-800/60 bg-slate-950/50">
+                        <th className="text-left py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Date</th>
+                        <th className="text-left py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Invoice</th>
+                        <th className="text-left py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Customer</th>
+                        <th className="text-left py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Agent</th>
+                        <th className="text-right py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Amount</th>
+                        <th className="text-right py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Commission</th>
+                        <th className="text-center py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {mockSales.map((sale) => (
-                        <tr key={sale.id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-3 px-4">{formatDate(sale.date)}</td>
-                          <td className="py-3 px-4 font-mono text-xs">{sale.invoiceNo}</td>
-                          <td className="py-3 px-4">{sale.customer}</td>
-                          <td className="py-3 px-4">{sale.agent}</td>
-                          <td className="py-3 px-4 text-right font-medium">{formatCurrency(sale.amount)}</td>
-                          <td className="py-3 px-4 text-right text-emerald-600">{formatCurrency(sale.commission)}</td>
-                          <td className="py-3 px-4 text-center">
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                sale.status === "completed"
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : sale.status === "pending"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-red-100 text-red-700"
-                              }`}
-                            >
-                              {sale.status}
-                            </span>
-                          </td>
+                      {sales.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-xs text-slate-600 font-mono">No sales records found in this range.</td>
                         </tr>
-                      ))}
+                      ) : (
+                        sales.map((sale) => {
+                          const ag = agents.find((a) => a.id === sale.agent_id)
+                          return (
+                            <tr key={sale.id} className="border-b border-slate-800/40 last:border-0 hover:bg-slate-800/30 transition-colors">
+                              <td className="py-3 px-4 text-slate-300 text-xs">{formatDate(sale.sale_date)}</td>
+                              <td className="py-3 px-4 font-mono text-[10px] text-slate-400">{sale.invoice_number}</td>
+                              <td className="py-3 px-4 text-slate-300 text-xs">{sale.customer_name || "Counter"}</td>
+                              <td className="py-3 px-4 text-slate-300 text-xs">{ag?.name || "Direct"}</td>
+                              <td className="py-3 px-4 text-right font-medium text-slate-200 text-xs">{formatCurrency(sale.amount)}</td>
+                              <td className="py-3 px-4 text-right text-emerald-400 text-xs font-medium">{formatCurrency(sale.commission_amount)}</td>
+                              <td className="py-3 px-4 text-center">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                  sale.status === "confirmed"
+                                    ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
+                                    : sale.status === "pending"
+                                    ? "bg-amber-950/60 text-amber-400 border border-amber-800/40"
+                                    : "bg-red-950/60 text-red-400 border border-red-800/40"
+                                }`}>
+                                  {sale.status}
+                                </span>
+                              </td>
+                            </tr>
+                          )
+                        })
+                      )}
                     </tbody>
-                    <tfoot>
-                      <tr className="border-t-2 font-semibold">
-                        <td className="py-3 px-4" colSpan={4}>Total</td>
-                        <td className="py-3 px-4 text-right">{formatCurrency(totalSales)}</td>
-                        <td className="py-3 px-4 text-right text-emerald-600">{formatCurrency(totalCommission)}</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
+                    {sales.length > 0 && (
+                      <tfoot>
+                        <tr className="border-t-2 border-slate-700 bg-slate-950/50">
+                          <td className="py-3 px-4 text-xs font-bold text-slate-300" colSpan={4}>Total</td>
+                          <td className="py-3 px-4 text-right font-bold text-white text-xs">{formatCurrency(totalRevenue)}</td>
+                          <td className="py-3 px-4 text-right font-bold text-emerald-400 text-xs">{formatCurrency(totalCommission)}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Agent Performance Tab */}
-          <TabsContent value="agents" className="space-y-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Agent Performance Report</CardTitle>
-                  <CardDescription>Commission and sales metrics by agent</CardDescription>
+          {/* ─── Agent Performance Tab ─── */}
+          <TabsContent value="agents" className="space-y-6">
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader className="border-b border-slate-800/60 pb-3">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-xs font-bold text-slate-200 uppercase tracking-wider">Agent Revenue Contribution</CardTitle>
+                  <span className="text-[10px] font-mono text-emerald-400">B2B sales channel</span>
                 </div>
-                <CsvExportButton
-                  data={getAgentCsvData(mockAgentPerformance)}
-                  filename={`agent-performance-${new Date().toISOString().split("T")[0]}`}
-                  label="Export Agents CSV"
-                />
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-4">
+                <div className="h-72">
+                  {agentRevenue.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={agentRevenue} margin={{ left: -10, right: 10, top: 10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis dataKey="name" stroke="#64748b" fontSize={9} />
+                        <YAxis stroke="#64748b" fontSize={9} />
+                        <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "8px" }} />
+                        <Legend verticalAlign="top" height={36} iconType="circle" />
+                        <Bar dataKey="Sales Revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Commission Paid" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-xs text-slate-600 font-mono">
+                      No active reseller metrics recorded.
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-900 border-slate-800 overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between border-b border-slate-800/60">
+                <div>
+                  <CardTitle className="text-xs font-bold text-slate-200 uppercase tracking-wider">Agent Performance Report</CardTitle>
+                  <CardDescription className="text-[10px] text-slate-500">Commission and sales metrics by agent</CardDescription>
+                </div>
+                <CsvExportButton data={getAgentCsvData()} filename={`agent-performance-${new Date().toISOString().split("T")[0]}`} label="Export Agents CSV" />
+              </CardHeader>
+              <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Agent</th>
-                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Total Sales</th>
-                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Commission</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Transactions</th>
-                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Avg Rate</th>
+                      <tr className="border-b border-slate-800/60 bg-slate-950/50">
+                        <th className="text-left py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Agent</th>
+                        <th className="text-right py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Total Sales</th>
+                        <th className="text-right py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Commission</th>
+                        <th className="text-center py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Transactions</th>
+                        <th className="text-right py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Avg Rate</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {mockAgentPerformance.map((agent) => (
-                        <tr key={agent.agentId} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-700">
-                                {agent.agentName.charAt(0)}
-                              </div>
-                              <span className="font-medium">{agent.agentName}</span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium">{formatCurrency(agent.totalSales)}</td>
-                          <td className="py-3 px-4 text-right text-emerald-600">{formatCurrency(agent.totalCommission)}</td>
-                          <td className="py-3 px-4 text-center">{agent.transactions}</td>
-                          <td className="py-3 px-4 text-right">{agent.avgCommissionRate}%</td>
+                      {agentRevenue.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-xs text-slate-600 font-mono">No agent performance data in this range.</td>
                         </tr>
-                      ))}
+                      ) : (
+                        agentRevenue.map((agent) => {
+                          const txns = sales.filter((s) => s.status === "confirmed" && agents.find((a) => a.name === agent.name)?.id === s.agent_id).length
+                          const avgRate = agent["Sales Revenue"] > 0 ? ((agent["Commission Paid"] / agent["Sales Revenue"]) * 100).toFixed(1) : "0.0"
+                          return (
+                            <tr key={agent.name} className="border-b border-slate-800/40 last:border-0 hover:bg-slate-800/30 transition-colors">
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-blue-950 flex items-center justify-center text-xs font-bold text-blue-400 border border-blue-800/40">
+                                    {agent.name.charAt(0)}
+                                  </div>
+                                  <span className="font-medium text-slate-300 text-xs">{agent.name}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 text-right font-medium text-slate-200 text-xs">{formatCurrency(agent["Sales Revenue"])}</td>
+                              <td className="py-3 px-4 text-right text-emerald-400 text-xs font-medium">{formatCurrency(agent["Commission Paid"])}</td>
+                              <td className="py-3 px-4 text-center text-slate-400 text-xs">{txns}</td>
+                              <td className="py-3 px-4 text-right text-slate-300 text-xs">{avgRate}%</td>
+                            </tr>
+                          )
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -321,47 +608,88 @@ export function ShopReportsPage({ shopId, user }: { shopId: string, user?: any }
             </Card>
           </TabsContent>
 
-          {/* Monthly Summary Tab */}
-          <TabsContent value="monthly" className="space-y-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+          {/* ─── Monthly Summary Tab ─── */}
+          <TabsContent value="monthly" className="space-y-6">
+            {isShop && (
+              <Card className="bg-slate-900 border-slate-800">
+                <CardHeader className="border-b border-slate-800/60 pb-3">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-xs font-bold text-slate-200 uppercase tracking-wider">Operating Cost Analysis: Commission vs. Payroll</CardTitle>
+                    <span className="text-[10px] font-mono text-indigo-400">Monthly expense comparison</span>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="h-72">
+                    {monthlyExpenses.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={monthlyExpenses} margin={{ left: -10, right: 10, top: 10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis dataKey="month" stroke="#64748b" fontSize={9} />
+                          <YAxis stroke="#64748b" fontSize={9} />
+                          <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "8px" }} />
+                          <Legend verticalAlign="top" height={36} />
+                          <Bar dataKey="Commission Costs" fill="#10b981" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Staff Payroll Costs" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-slate-600 font-mono">
+                        No expense data in this date range.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card className="bg-slate-900 border-slate-800 overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between border-b border-slate-800/60">
                 <div>
-                  <CardTitle>Monthly Summary Report</CardTitle>
-                  <CardDescription>Month-over-month performance trends</CardDescription>
+                  <CardTitle className="text-xs font-bold text-slate-200 uppercase tracking-wider">Monthly Summary Report</CardTitle>
+                  <CardDescription className="text-[10px] text-slate-500">Month-over-month performance trends</CardDescription>
                 </div>
-                <CsvExportButton
-                  data={getMonthlyCsvData(mockMonthly)}
-                  filename={`monthly-summary-${new Date().toISOString().split("T")[0]}`}
-                  label="Export Monthly CSV"
-                />
+                <CsvExportButton data={getMonthlyCsvData()} filename={`monthly-summary-${new Date().toISOString().split("T")[0]}`} label="Export Monthly CSV" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Month</th>
-                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Total Sales</th>
-                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Commission</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Transactions</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Active Agents</th>
+                      <tr className="border-b border-slate-800/60 bg-slate-950/50">
+                        <th className="text-left py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Month</th>
+                        <th className="text-right py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Total Sales</th>
+                        <th className="text-right py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Commission</th>
+                        <th className="text-center py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Transactions</th>
+                        <th className="text-center py-3 px-4 font-medium text-slate-500 text-[10px] uppercase tracking-wider">Active Agents</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {mockMonthly.map((month) => (
-                        <tr key={month.month} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-3 px-4 font-medium">{month.month}</td>
-                          <td className="py-3 px-4 text-right">{formatCurrency(month.totalSales)}</td>
-                          <td className="py-3 px-4 text-right text-emerald-600">{formatCurrency(month.totalCommission)}</td>
-                          <td className="py-3 px-4 text-center">{month.transactionCount}</td>
-                          <td className="py-3 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <Users className="w-3 h-3 text-muted-foreground" />
-                              {month.activeAgents}
-                            </div>
-                          </td>
+                      {monthlyExpenses.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-xs text-slate-600 font-mono">No monthly data in this range.</td>
                         </tr>
-                      ))}
+                      ) : (
+                        monthlyExpenses.map((m) => {
+                          const monthKey = new Date(m.month).toISOString().slice(0, 7)
+                          const salesInMonth = sales.filter((s) => s.sale_date.startsWith(monthKey) && s.status === "confirmed")
+                          const agentsInMonth = new Set(salesInMonth.map((s) => s.agent_id)).size
+                          const totalSalesMonth = salesInMonth.reduce((sum, s) => sum + s.amount, 0)
+                          const totalCommMonth = salesInMonth.reduce((sum, s) => sum + s.commission_amount, 0)
+                          return (
+                            <tr key={m.month} className="border-b border-slate-800/40 last:border-0 hover:bg-slate-800/30 transition-colors">
+                              <td className="py-3 px-4 font-medium text-slate-300 text-xs">{m.month}</td>
+                              <td className="py-3 px-4 text-right text-slate-200 text-xs">{formatCurrency(totalSalesMonth)}</td>
+                              <td className="py-3 px-4 text-right text-emerald-400 text-xs font-medium">{formatCurrency(totalCommMonth)}</td>
+                              <td className="py-3 px-4 text-center text-slate-400 text-xs">{salesInMonth.length}</td>
+                              <td className="py-3 px-4 text-center">
+                                <div className="flex items-center justify-center gap-1 text-slate-400 text-xs">
+                                  <Users className="w-3 h-3" />
+                                  {agentsInMonth}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -369,6 +697,14 @@ export function ShopReportsPage({ shopId, user }: { shopId: string, user?: any }
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* ═══ Footer ═══ */}
+        <div className="bg-slate-950 p-4 border border-slate-800 rounded-xl flex items-start gap-3">
+          <Sparkles className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            The <strong className="text-slate-300">Pyro-Bay Analytics Engine</strong> queries operational, attendance, and sales ledger indexes dynamically. Output records are strictly locked according to Jharkhand banking division regulations.
+          </p>
+        </div>
       </div>
     </MainLayout>
   )
