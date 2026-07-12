@@ -4,8 +4,9 @@ import { ShopDashboardPage } from "./dashboard-client"
 export default async function DashboardPage({
   params,
 }: {
-  params: { shopId: string }
+  params: Promise<{ shopId: string }>
 }) {
-  const { user } = await verifyShopOwnership(params.shopId)
-  return <ShopDashboardPage shopId={params.shopId} user={user} />
+  const { shopId } = await params
+  const { user } = await verifyShopOwnership(shopId)
+  return <ShopDashboardPage shopId={shopId} user={user} />
 }
