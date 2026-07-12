@@ -35,7 +35,7 @@ export function AddStaffDialog({ open, onOpenChange, onStaffAdded, shopId }: Add
     bank_name: "",
     ifsc_code: "",
     upi_id: "",
-    joining_date: new Date().toISOString().split("T")[0],
+    join_date: new Date().toISOString().split("T")[0],
     email: "",
   })
 
@@ -72,7 +72,7 @@ export function AddStaffDialog({ open, onOpenChange, onStaffAdded, shopId }: Add
           ifsc_code: formData.ifsc_code,
           upi_id: formData.upi_id,
           is_active: true,
-          joining_date: formData.joining_date,
+          joining_date: formData.join_date,
           email: formData.email,
         })
 
@@ -96,7 +96,7 @@ export function AddStaffDialog({ open, onOpenChange, onStaffAdded, shopId }: Add
         bank_name: "",
         ifsc_code: "",
         upi_id: "",
-        joining_date: new Date().toISOString().split("T")[0],
+        join_date: new Date().toISOString().split("T")[0],
         email: "",
       })
     } catch (err: any) {
@@ -165,8 +165,8 @@ export function AddStaffDialog({ open, onOpenChange, onStaffAdded, shopId }: Add
                 <label className="mb-1.5 block text-xs font-medium text-slate-500">Onboarding Date</label>
                 <Input 
                   type="date" 
-                  value={formData.joining_date} 
-                  onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })} 
+                  value={formData.join_date} 
+                  onChange={(e) => setFormData({ ...formData, join_date: e.target.value })} 
                   className="bg-slate-50 border-slate-200"
                 />
               </div>
