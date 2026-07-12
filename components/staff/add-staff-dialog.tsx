@@ -72,7 +72,7 @@ export function AddStaffDialog({ open, onOpenChange, onStaffAdded, shopId }: Add
           ifsc_code: formData.ifsc_code,
           upi_id: formData.upi_id,
           is_active: true,
-          joining_date: formData.join_date,
+          join_date: formData.join_date,
           email: formData.email,
         })
 

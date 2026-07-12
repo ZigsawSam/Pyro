@@ -48,7 +48,7 @@ interface StaffMember {
   bank_name?: string
   ifsc_code?: string
   upi_id?: string
-  joining_date?: string
+  join_date?: string
   email?: string
   department?: string
   employee_id?: string
@@ -105,7 +105,7 @@ export function ShopStaffPage({ shopId: shopIdProp, user }: ShopStaffPageProps) 
     try {
       const { data: staffData, error: staffError } = await supabase
         .from("staff")
-        .select("id, name, phone, role, salary_type, base_salary, working_hours_per_day, overtime_rate, is_active, account_name, account_number, bank_name, ifsc_code, upi_id, joining_date, email, department, employee_id")
+        .select("id, name, phone, role, salary_type, base_salary, working_hours_per_day, overtime_rate, is_active, account_name, account_number, bank_name, ifsc_code, upi_id, join_date, email, department, employee_id")
         .eq("shop_id", shopId)
 
       if (staffError) throw staffError
