@@ -163,8 +163,7 @@ export function ShopStaffPage({ shopId: shopIdProp, user }: ShopStaffPageProps) 
   }
 
   const handleAddStaff = () => {
-    setSelectedStaff(null)
-    setShowProfile(true)
+      setShowAddDialog(true)
   }
 
   return (
