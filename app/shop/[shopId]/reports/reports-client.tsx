@@ -109,7 +109,7 @@ function getMonthlyCsvData(months: MonthlySummary[]): Record<string, string | nu
 }
 
 // ─── Component ───────────────────────────────────────────
-export default function ShopReportsPage({ params }: { params: { shopId: string } }) {
+export function ShopReportsPage({ shopId, user }: { shopId: string, user?: any }) {
   const [activeTab, setActiveTab] = useState("sales")
 
   const handlePrint = () => {

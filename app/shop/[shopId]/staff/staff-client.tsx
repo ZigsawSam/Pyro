@@ -1,6 +1,5 @@
 "use client"
 
-import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -41,10 +40,15 @@ interface PayoutRecord {
   amount_paid: number
 }
 
-export default function ShopStaffPage() {
+interface ShopStaffPageProps {
+  shopId: string
+  user?: any
+}
+
+export function ShopStaffPage({ shopId: shopIdProp, user }: ShopStaffPageProps) {
   const supabase = createShopClient()
-  const params = useParams()
-  const shopId = Number(params?.shopId)
+  const shopId = parseInt(shopIdProp, 10)
+  
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -55,7 +59,7 @@ export default function ShopStaffPage() {
   const [payoutsMap, setPayoutsMap] = useState<Record<number, number>>({})
 
   useEffect(() => {
-    fetchStaff()
+    if (!isNaN(shopId)) fetchStaff()
   }, [shopId])
 
   const fetchStaff = async () => {
@@ -163,29 +167,20 @@ export default function ShopStaffPage() {
 
   return (
     <MainLayout title="Staff & Payroll" subtitle="Manage staff and process payroll" shopId={shopId}>
+      {/* SINGLE header with search + add button */}
       <div className="flex items-center justify-between mb-6">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-          placeholder="Search staff..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
+            placeholder="Search staff..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
           />
         </div>
         <Button onClick={handleAddStaff}>
-        <Plus className="mr-2 h-4 w-4" /> Add Staff
+          <Plus className="mr-2 h-4 w-4" /> Add Staff
         </Button>
-      </div>
-
-      <div className="relative mb-6">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search staff..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
       </div>
 
       {loading ? (
@@ -216,7 +211,6 @@ export default function ShopStaffPage() {
                   {member.role} • {member.salary_type} • ₹{Number(member.base_salary).toLocaleString()}
                 </p>
 
-                {/* Pending/Paid summary - same as agent cards */}
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center justify-between py-2 px-3 bg-secondary/50 rounded-lg">
                     <span className="text-sm font-medium">Pending</span>

@@ -1,13 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter, useParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Users, DollarSign, TrendingUp, Calendar } from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 
-// New dashboard components (from components/dashboard/shop/)
+// New dashboard components
 import { SalesTrendChart } from "@/components/dashboard/shop/SalesTrendChart"
 import { RevenueBreakdown } from "@/components/dashboard/shop/RevenueBreakdown"
 import { MonthlyTarget } from "@/components/dashboard/shop/MonthlyTarget"
@@ -17,15 +16,20 @@ import { PendingActions } from "@/components/dashboard/shop/PendingActions"
 import { QuickActions } from "@/components/dashboard/shop/QuickActions"
 import { ActivityTimeline } from "@/components/dashboard/shop/ActivityTimeline"
 
-export default function ShopDashboardPage() {
-  const router = useRouter()
-  const params = useParams()
+interface ShopDashboardPageProps {
+  shopId: string
+  user?: any
+}
+
+export function ShopDashboardPage({ shopId: shopIdProp, user }: ShopDashboardPageProps) {
   const supabase = createShopClient()
-  const shopId = Number(params?.shopId)
+  
+  // Convert prop string to number once
+  const shopId = parseInt(shopIdProp, 10)
+  
   const [loading, setLoading] = useState(true)
   const [shopName, setShopName] = useState("")
 
-  // Your existing stats
   const [stats, setStats] = useState({
     totalAgents: 0,
     totalStaff: 0,
@@ -36,14 +40,13 @@ export default function ShopDashboardPage() {
   })
 
   useEffect(() => {
-    if (!shopId || isNaN(shopId)) return
+    if (isNaN(shopId)) return
     fetchDashboardData()
   }, [shopId])
 
   const fetchDashboardData = async () => {
     setLoading(true)
     try {
-      // Fetch shop name
       const { data: shop } = await supabase
         .from("shops")
         .select("shop_name")
@@ -78,7 +81,7 @@ export default function ShopDashboardPage() {
       const monthSales = (monthSalesData || []).reduce((sum, s) => sum + Number(s.amount || 0), 0)
       const pendingPayouts = (payoutsData || []).reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
 
-      // === YOUR EXACT STAFF SALARY CALCULATION ===
+      // === EXACT STAFF SALARY CALCULATION (PRESERVED) ===
       let totalPendingSalary = 0
       const staffList = staffData || []
       const attendanceList = attendanceData || []
@@ -124,7 +127,7 @@ export default function ShopDashboardPage() {
     }
   }
 
-  if (!shopId || isNaN(shopId)) {
+  if (isNaN(shopId)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -145,7 +148,7 @@ export default function ShopDashboardPage() {
   return (
     <MainLayout title="Dashboard" shopId={shopId} shopName={shopName} isAgent={false}>
       <div className="space-y-6">
-        {/* === YOUR EXISTING 6 STAT CARDS (PRESERVED) === */}
+        {/* === 6 STAT CARDS (PRESERVED) === */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -208,7 +211,7 @@ export default function ShopDashboardPage() {
           </Card>
         </div>
 
-        {/* === NEW DASHBOARD COMPONENTS (ADDED) === */}
+        {/* === NEW DASHBOARD COMPONENTS === */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <SalesTrendChart shopId={shopId} />

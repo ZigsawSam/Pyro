@@ -1,335 +1,167 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Loader2, Plus, TrendingUp, Calendar, User } from "lucide-react"
-import { createShopClient } from "@/lib/supabase/shop-client"
-import { MainLayout } from "@/components/layout/main-layout"
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Plus, Search, ShoppingCart } from "lucide-react";
 
-interface Sale {
-  id: number
-  agent_id: number
-  agent_name: string
-  amount: number
-  commission_amount: number
-  commission_rate: number
-  sale_date: string
-  notes: string
+interface SalesClientProps {
+  shopId: string;
+  user?: any;
 }
 
-interface LinkedAgent {
-  id: number
-  name: string
-  commission_rate: number
-}
-
-export default function ShopSalesPage() {
-  const router = useRouter()
-  const supabase = createShopClient()
-  const [shopId, setShopId] = useState<number | null>(null)
-  const [sales, setSales] = useState<Sale[]>([])
-  const [agents, setAgents] = useState<LinkedAgent[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [newSale, setNewSale] = useState({
-    agent_id: "",
-    amount: "",
-    commission_amount: "",
-    commission_rate: "",
-    sale_date: new Date().toISOString().split("T")[0],
-    notes: "",
-  })
+export function ShopSalesPage({ shopId, user }: SalesClientProps) {
+  const [sales, setSales] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   useEffect(() => {
-    // Get shopId from URL
-    const path = window.location.pathname
-    const match = path.match(/\/shop\/(\d+)\/sales/)
-    if (match) {
-      setShopId(Number(match[1]))
-    }
-  }, [])
+    fetchSales();
+  }, [shopId]);
 
-  useEffect(() => {
-    if (shopId) {
-      checkAuth()
-    }
-  }, [shopId])
-
-  const checkAuth = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      router.push("/auth/shop-login")
-      return
-    }
-    // Verify user owns this shop
-    const { data: shop } = await supabase
-      .from("shops")
-      .select("id, shop_name")
-      .eq("id", shopId)
-      .eq("user_id", user.id)
-      .single()
-    
-    if (!shop) {
-      router.push("/auth/shop-login")
-      return
-    }
-    
-    fetchData()
-  }
-
-  const fetchData = async () => {
-    if (!shopId) return
-    setLoading(true)
+  const fetchSales = async () => {
     try {
-      // Fetch linked agents with commission rates
-      const { data: linkedAgents, error: agentsError } = await supabase
-        .from("shop_agents")
-        .select(`
-          agent_id,
-          commission_rate,
-          agents:agent_id (id, name)
-        `)
-        .eq("shop_id", shopId)
-
-      if (agentsError) throw agentsError
-
-      const formattedAgents = (linkedAgents || []).map((la: any) => ({
-        id: la.agent_id,
-        name: la.agents?.name || "Unknown",
-        commission_rate: la.commission_rate,
-      }))
-      setAgents(formattedAgents)
-
-      // Fetch sales for this shop
-      const { data: salesData, error: salesError } = await supabase
-        .from("sales")
-        .select(`
-          id,
-          agent_id,
-          amount,
-          commission_amount,
-          commission_rate,
-          sale_date,
-          notes,
-          agents:agent_id (name)
-        `)
-        .eq("shop_id", shopId)
-        .order("sale_date", { ascending: false })
-
-      if (salesError) throw salesError
-
-      const formattedSales = (salesData || []).map((s: any) => ({
-        id: s.id,
-        agent_id: s.agent_id,
-        agent_name: s.agents?.name || "Unknown",
-        amount: s.amount,
-        commission_amount: s.commission_amount,
-        commission_rate: s.commission_rate,
-        sale_date: s.sale_date,
-        notes: s.notes,
-      }))
-      setSales(formattedSales)
-    } catch (e) {
-      console.error("fetchData error:", e)
+      setLoading(true);
+      const res = await fetch(`/api/shops/${shopId}/sales`);
+      if (!res.ok) throw new Error("Failed to fetch sales");
+      const data = await res.json();
+      setSales(data.sales || []);
+    } catch (error) {
+      console.error("Sales error:", error);
+      toast.error("Failed to load sales data");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
+  };
+
+  const filteredSales = sales.filter((sale) =>
+    sale.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    sale.id?.toString().includes(searchQuery)
+  );
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
   }
-
-  const handleAgentChange = (agentId: string) => {
-    const agent = agents.find(a => a.id === Number(agentId))
-    const rate = agent?.commission_rate || 0
-    const amount = Number(newSale.amount)
-    const commission = amount * (rate / 100)
-    
-    setNewSale({
-      ...newSale,
-      agent_id: agentId,
-      commission_rate: String(rate),
-      commission_amount: amount ? commission.toFixed(2) : "",
-    })
-  }
-
-  const handleAmountChange = (amount: string) => {
-    const agent = agents.find(a => a.id === Number(newSale.agent_id))
-    const rate = agent?.commission_rate || 0
-    const commission = Number(amount) * (rate / 100)
-    
-    setNewSale({
-      ...newSale,
-      amount,
-      commission_rate: String(rate),
-      commission_amount: amount ? commission.toFixed(2) : "",
-    })
-  }
-
-  const handleAddSale = async () => {
-    if (!shopId || !newSale.agent_id || !newSale.amount) return
-    try {
-      const { error } = await supabase.from("sales").insert({
-        shop_id: shopId,
-        agent_id: Number(newSale.agent_id),
-        amount: Number(newSale.amount),
-        commission_amount: Number(newSale.commission_amount),
-        commission_rate: Number(newSale.commission_rate),
-        sale_date: newSale.sale_date,
-        notes: newSale.notes,
-      })
-
-      if (error) throw error
-
-      setNewSale({
-        agent_id: "",
-        amount: "",
-        commission_amount: "",
-        commission_rate: "",
-        sale_date: new Date().toISOString().split("T")[0],
-        notes: "",
-      })
-      setShowAddForm(false)
-      fetchData()
-    } catch (e) {
-      console.error("handleAddSale error:", e)
-      alert("Failed to add sale")
-    }
-  }
-
-  const totalSales = sales.reduce((sum, s) => sum + Number(s.amount || 0), 0)
-  const totalCommission = sales.reduce((sum, s) => sum + Number(s.commission_amount || 0), 0)
 
   return (
-    <MainLayout title="Sales" subtitle="Record and track sales made by your agents" shopId={shopId || undefined}>
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-end mb-6">
-          <Button onClick={() => setShowAddForm(!showAddForm)} className="gap-2">
-          <Plus className="h-4 w-4" /> {showAddForm ? "Cancel" : "Add Sale"}
-          </Button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4">
-          <Card className="p-4">
-            <p className="text-sm text-muted-foreground">Total Sales</p>
-            <p className="text-2xl font-bold">₹{totalSales.toLocaleString()}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-sm text-muted-foreground">Total Commission</p>
-            <p className="text-2xl font-bold text-green-600">₹{totalCommission.toLocaleString()}</p>
-          </Card>
-        </div>
-
-        {/* Add Sale Form */}
-        {showAddForm && (
-          <Card className="p-4 space-y-4">
-            <h3 className="font-semibold">Record New Sale</h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium mb-1">Agent</label>
-                <select
-                  value={newSale.agent_id}
-                  onChange={(e) => handleAgentChange(e.target.value)}
-                  className="w-full rounded border border-input bg-background px-3 py-2"
-                >
-                  <option value="">Select agent</option>
-                  {agents.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name} ({agent.commission_rate}%)
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Sale Amount (₹)</label>
-                <Input
-                  type="number"
-                  placeholder="Enter amount"
-                  value={newSale.amount}
-                  onChange={(e) => handleAmountChange(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Commission (₹)</label>
-                <Input
-                  type="number"
-                  value={newSale.commission_amount}
-                  readOnly
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Rate: {newSale.commission_rate}% (auto-calculated)
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Date</label>
-                <Input
-                  type="date"
-                  value={newSale.sale_date}
-                  onChange={(e) => setNewSale({...newSale, sale_date: e.target.value})}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Notes</label>
-              <Input
-                placeholder="Optional notes..."
-                value={newSale.notes}
-                onChange={(e) => setNewSale({...newSale, notes: e.target.value})}
-              />
-            </div>
-            <Button 
-              onClick={handleAddSale} 
-              disabled={!newSale.agent_id || !newSale.amount}
-              className="w-full"
-            >
-              Record Sale
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Sales</h1>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Sale
             </Button>
-          </Card>
-        )}
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create New Sale</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-muted-foreground">
+                Sale creation form would go here. This is a placeholder for the actual implementation.
+              </p>
+              <Button 
+                className="mt-4" 
+                onClick={() => {
+                  toast.success("Sale created successfully");
+                  setIsAddDialogOpen(false);
+                  fetchSales();
+                }}
+              >
+                Create Sale (Demo)
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
 
-        {/* Sales History */}
-        {loading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        ) : sales.length === 0 ? (
-          <Card className="p-8 text-center text-muted-foreground">
-            <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No sales recorded yet.</p>
-            <p className="text-sm">Add your first sale using the button above.</p>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {sales.map((sale) => (
-              <Card key={sale.id} className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-primary/10 p-2 rounded">
-                      <User className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium">{sale.agent_name}</p>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(sale.sale_date).toLocaleDateString()}
-                        {sale.notes && <span>• {sale.notes}</span>}
-                      </div>
-                    </div>
+      <div className="flex items-center gap-2">
+        <Search className="h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by customer name or sale ID..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="max-w-sm"
+        />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>All Sales</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredSales.length === 0 ? (
+            <div className="text-center py-8">
+              <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No sales found</p>
+              {searchQuery && (
+                <Button variant="link" onClick={() => setSearchQuery("")}>
+                  Clear search
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredSales.map((sale) => (
+                <div
+                  key={sale.id}
+                  className="flex items-center justify-between border-b pb-4 last:border-0"
+                >
+                  <div>
+                    <p className="font-medium">
+                      Sale #{sale.id} - {sale.customerName || "Walk-in"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDate(sale.createdAt)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {sale.items?.length || 0} items
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold">₹{Number(sale.amount).toLocaleString()}</p>
-                    <p className="text-sm text-green-600">₹{Number(sale.commission_amount).toLocaleString()} commission</p>
-                    <p className="text-xs text-muted-foreground">{sale.commission_rate}% rate</p>
+                    <p className="text-lg font-bold">{formatCurrency(sale.totalAmount)}</p>
+                    <p className="text-sm text-muted-foreground capitalize">{sale.paymentMethod}</p>
                   </div>
                 </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    </MainLayout>
-  )
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

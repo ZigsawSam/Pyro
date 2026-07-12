@@ -3,11 +3,10 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
 import { Loader2, Plus, Search, Phone, UserCircle, CreditCard, UserRound } from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
-import { verifyShopOwnership } from "@/lib/auth-guards"
 import { MainLayout } from "@/components/layout/main-layout"
 import { AgentProfileDialog } from "@/components/agents/agent-profile-dialog"
 import { PayAgentDialog } from "@/components/agents/pay-agent-dialog"
@@ -29,10 +28,17 @@ interface Agent {
   paid_commission?: number
 }
 
-export default function ShopAgentsPage() {
+interface ShopAgentsPageProps {
+  shopId: string
+  user?: any
+}
+
+export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps) {
   const router = useRouter()
   const supabase = createShopClient()
-  const [shopId, setShopId] = useState<number | null>(null)
+  
+  const shopId = parseInt(shopIdProp, 10)
+  
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -41,22 +47,8 @@ export default function ShopAgentsPage() {
   const [showPayDialog, setShowPayDialog] = useState(false)
 
   useEffect(() => {
-    const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push("/auth/login"); return }
-
-      const { data: shop } = await supabase
-        .from("shops")
-        .select("id")
-        .eq("user_id", user.id)
-        .single()
-
-      if (!shop) { router.push("/auth/login"); return }
-      setShopId(shop.id)
-      fetchAgents(shop.id)
-    }
-    init()
-  }, [router, supabase])
+    if (!isNaN(shopId)) fetchAgents(shopId)
+  }, [shopId])
 
   const fetchAgents = async (sid: number) => {
     setLoading(true)
@@ -77,7 +69,6 @@ export default function ShopAgentsPage() {
 
       if (agentError) throw agentError
 
-      // Fetch sales and payouts for each agent
       const { data: salesData } = await supabase
         .from("sales")
         .select("agent_id, amount, commission_amount")
@@ -131,7 +122,7 @@ export default function ShopAgentsPage() {
   const openProfile = (agent: Agent) => { setSelectedAgent(agent); setShowProfile(true) }
   const openPay = (agent: Agent) => { setSelectedAgent(agent); setShowPayDialog(true) }
 
-  if (!shopId) {
+  if (isNaN(shopId)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -151,7 +142,7 @@ export default function ShopAgentsPage() {
             className="pl-10"
           />
         </div>
-        <Button onClick={() => router.push(`/shop/${shopId}/agents/add`)}>
+        <Button onClick={() => router.push(`/shop/${shopIdProp}/agents/add`)}>
           <Plus className="mr-2 h-4 w-4" /> Add Agent
         </Button>
       </div>
@@ -212,8 +203,8 @@ export default function ShopAgentsPage() {
         onOpenChange={setShowProfile}
         shopId={shopId}
         agent={selectedAgent}
-        onUpdated={() => { setShowProfile(false); if (shopId) fetchAgents(shopId) }}
-        onDeleted={() => { setShowProfile(false); if (shopId) fetchAgents(shopId) }}
+        onUpdated={() => { setShowProfile(false); if (!isNaN(shopId)) fetchAgents(shopId) }}
+        onDeleted={() => { setShowProfile(false); if (!isNaN(shopId)) fetchAgents(shopId) }}
       />
 
       <PayAgentDialog
@@ -221,7 +212,7 @@ export default function ShopAgentsPage() {
         onOpenChange={setShowPayDialog}
         shopId={shopId}
         agent={selectedAgent}
-        onPaid={() => { setShowPayDialog(false); if (shopId) fetchAgents(shopId) }}
+        onPaid={() => { setShowPayDialog(false); if (!isNaN(shopId)) fetchAgents(shopId) }}
       />
     </MainLayout>
   )

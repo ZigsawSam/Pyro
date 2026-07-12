@@ -1,6 +1,5 @@
 "use client"
 
-import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,10 +23,17 @@ interface AttendanceLog {
   status: string
 }
 
-export default function ShopAttendancePage() {
+interface ShopAttendancePageProps {
+  shopId: string
+  user?: any
+}
+
+export function ShopAttendancePage({ shopId: shopIdProp, user }: ShopAttendancePageProps) {
   const supabase = createShopClient()
-  const params = useParams()
-  const shopId = Number(params?.shopId)
+  
+  // Convert prop string to number once
+  const shopId = parseInt(shopIdProp, 10)
+  
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
   const [staff, setStaff] = useState<StaffAttendance[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,6 +43,7 @@ export default function ShopAttendancePage() {
   const [logLoading, setLogLoading] = useState(false)
 
   useEffect(() => {
+    if (isNaN(shopId)) return
     fetchAttendance()
   }, [shopId, date])
 

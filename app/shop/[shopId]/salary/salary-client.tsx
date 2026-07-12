@@ -1,6 +1,5 @@
 "use client"
 
-import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,10 +23,15 @@ interface SalaryRecord {
   status: string
 }
 
-export default function ShopSalaryPage() {
+interface ShopSalaryPageProps {
+  shopId: string
+  user?: any
+}
+
+export function ShopSalaryPage({ shopId: shopIdProp, user }: ShopSalaryPageProps) {
   const supabase = createShopClient()
-  const params = useParams()
-  const shopId = Number(params?.shopId)
+  const shopId = parseInt(shopIdProp, 10)
+  
   const [month, setMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -36,7 +40,7 @@ export default function ShopSalaryPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchSalaryData()
+    if (!isNaN(shopId)) fetchSalaryData()
   }, [shopId, month])
 
   const fetchSalaryData = async () => {
@@ -46,7 +50,6 @@ export default function ShopSalaryPage() {
       const monthStart = `${year}-${monthNum}-01`
       const monthEnd = `${year}-${monthNum}-${new Date(Number(year), Number(monthNum), 0).getDate()}`
 
-      // Fetch staff with working hours config
       const { data: staffData, error: staffError } = await supabase
         .from("staff")
         .select("id, name, salary_type, base_salary, working_hours_per_day, overtime_rate")
@@ -55,7 +58,6 @@ export default function ShopSalaryPage() {
 
       if (staffError) throw staffError
 
-      // Fetch attendance for the month
       const { data: attendanceData } = await supabase
         .from("attendance")
         .select("staff_id, status, work_hours, overtime_hours")
@@ -63,7 +65,6 @@ export default function ShopSalaryPage() {
         .gte("attendance_date", monthStart)
         .lte("attendance_date", monthEnd)
 
-      // Fetch advances (payouts) for the month
       const { data: advancesData } = await supabase
         .from("payouts")
         .select("staff_id, amount_paid")
@@ -72,7 +73,6 @@ export default function ShopSalaryPage() {
         .gte("payment_date", monthStart)
         .lte("payment_date", monthEnd)
 
-      // Fetch existing salary records
       const { data: existingSalary } = await supabase
         .from("salary")
         .select("*")
@@ -84,7 +84,6 @@ export default function ShopSalaryPage() {
         return acc
       }, {})
 
-      // Calculate attendance per staff
       const attendanceByStaff = (attendanceData || []).reduce((acc: any, a: any) => {
         if (!acc[a.staff_id]) {
           acc[a.staff_id] = { present: 0, half: 0, hours: 0, overtime_hours: 0 }
@@ -96,13 +95,11 @@ export default function ShopSalaryPage() {
         return acc
       }, {})
 
-      // Calculate advances per staff
       const advancesByStaff = (advancesData || []).reduce((acc: any, a: any) => {
         acc[a.staff_id] = (acc[a.staff_id] || 0) + Number(a.amount_paid || 0)
         return acc
       }, {})
 
-      // Build salary records
       const records = (staffData || []).map((s: any) => {
         const att = attendanceByStaff[s.id] || { present: 0, half: 0, hours: 0, overtime_hours: 0 }
         const presentDays = att.present + (att.half * 0.5)
@@ -149,7 +146,6 @@ export default function ShopSalaryPage() {
 
       setSalaryRecords(records)
 
-      // Auto-save salary records to database so they have IDs for payment
       if (records.length > 0) {
         const upsertData = records.map((r) => ({
           shop_id: shopId,
@@ -166,7 +162,6 @@ export default function ShopSalaryPage() {
           onConflict: "shop_id,staff_id,month",
         }).select()
 
-        // Update records with IDs from database
         if (upserted) {
           const idMap = upserted.reduce((acc: any, s: any) => {
             acc[s.staff_id] = s.id
@@ -189,7 +184,6 @@ export default function ShopSalaryPage() {
         return
       }
 
-      // Update salary status to paid
       const { error: salaryError } = await supabase
         .from("salary")
         .update({ status: "paid", paid_at: new Date().toISOString() })
@@ -197,7 +191,6 @@ export default function ShopSalaryPage() {
 
       if (salaryError) throw salaryError
 
-      // Create payout record
       const { error: payoutError } = await supabase.from("payouts").insert({
         shop_id: shopId,
         staff_id: record.staff_id,
@@ -223,29 +216,22 @@ export default function ShopSalaryPage() {
 
   return (
     <MainLayout title="Salary" subtitle="Calculate and process monthly staff payroll" shopId={shopId}>
-          <div className="flex items-center justify-end gap-3 mb-6">
-          <div className="text-right">
-             <p className="text-sm text-muted-foreground">Total Pending</p>
-             <p className="text-xl font-bold text-red-600">₹{totalPending.toLocaleString()}</p>
-          </div>
-          <div className="flex items-center gap-2">
-               <Calendar className="h-4 w-4" />
-              <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-auto" />
-          </div>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-muted-foreground">Total Pending</p>
-            <p className="text-xl font-bold text-red-600">₹{totalPending.toLocaleString()}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            <Input
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              className="w-auto"
-            />
-          </div>
+      {/* Single header — removed duplicate */}
+      <div className="flex items-center justify-end gap-3 mb-6">
+        <div className="text-right">
+          <p className="text-sm text-muted-foreground">Total Pending</p>
+          <p className="text-xl font-bold text-red-600">₹{totalPending.toLocaleString()}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4" />
+          <Input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="w-auto"
+          />
+        </div>
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-8">
