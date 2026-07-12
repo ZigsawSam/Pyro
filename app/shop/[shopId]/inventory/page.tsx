@@ -1,7 +1,7 @@
 import { verifyShopOwnership } from "@/lib/auth-guard"
 import { InventoryPage } from "./inventory-client"
 
-export default async function InventoryPage({
+export default async function InventoryServerPage({
   params,
 }: {
   params: { shopId: string }
