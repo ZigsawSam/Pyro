@@ -22,7 +22,7 @@ async function updateSession(request: NextRequest) {
   return { response, user }
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { response, user } = await updateSession(request)
   const { pathname } = request.nextUrl
 
@@ -35,10 +35,6 @@ export async function proxy(request: NextRequest) {
   if (!user) {
     return NextResponse.redirect(new URL("/auth/login", request.url))
   }
-
-  // REMOVED: Role-based redirects cause loops.
-  // Let server components (auth-guard.ts) handle role validation.
-  // The proxy only ensures the user is authenticated.
 
   return response
 }
