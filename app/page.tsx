@@ -9,6 +9,12 @@ export default function LandingPage() {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex flex-col">
       <nav className="w-full px-6 py-4 flex items-center justify-between max-w-7xl mx-auto">
         <div className="text-xl font-bold text-slate-900">PayPro</div>
+        <div className="hidden md:flex items-center gap-6 text-sm text-slate-600">
+          <span className="hover:text-slate-900 cursor-pointer">Features</span>
+          <span className="hover:text-slate-900 cursor-pointer">How it Works</span>
+          <span className="hover:text-slate-900 cursor-pointer">Pricing</span>
+          <span className="hover:text-slate-900 cursor-pointer">Resources</span>
+        </div>
       </nav>
 
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center">
@@ -28,7 +34,6 @@ export default function LandingPage() {
           payroll seamlessly. Built for retail businesses that scale.
         </p>
 
-        {/* Shop Owner */}
         <div className="flex flex-col sm:flex-row items-center gap-4 mb-8">
           <Link href="/auth/shop-login">
             <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-base rounded-xl">
@@ -53,7 +58,6 @@ export default function LandingPage() {
           <div className="flex-1 h-px bg-slate-200" />
         </div>
 
-        {/* Agent */}
         <div className="flex flex-col sm:flex-row items-center gap-4">
           <Link href="/auth/agent-login">
             <Button size="lg" variant="outline" className="px-8 py-6 text-base rounded-xl border-slate-300">
