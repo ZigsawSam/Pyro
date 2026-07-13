@@ -73,13 +73,21 @@ export default function PayoutsPage() {
         agent_id: agentId,
         amount_paid: pendingAmount,
         status: "pending",
+        person_type: "agent",
+        shop_id: null, // Assuming this is a general payout not tied to a specific shop
+        staff_id: null, // Assuming this is a general payout not tied to a specific staff
+        payment_date: new Date().toISOString().split ("T")[0], // Current date in YYYY-MM-DD format
+        payment_method: "bank_transfer", // Assuming a default payment method
+        remarks: "Agent payout request", // Optional remarks
+        receipt_number: `AGT-${Date.now()}`, // Unique receipt number
       })
       if (error) throw error
       fetchData(agentId)
       alert(`Payout request of ₹${pendingAmount.toLocaleString()} submitted!`)
-    } catch (e) {
-      console.error(e)
-      alert("Failed to request payout. Make sure your payouts table has the right columns.")
+    } catch (e: any) {
+      console.error("Payout error:", e)
+      const msg = e?.message || e?.error_description || e?.detail || "Unknown error"
+      alert(`Failed: ${msg}`)
     } finally {
       setRequesting(false)
     }
