@@ -186,7 +186,6 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
         agent_id: agent.id,
         amount_paid: Number(paymentAmount),
         payment_date: new Date().toISOString().split("T")[0],
-        receipt_number: receiptNumber,
         remarks: `Pending ₹${pendingDeducted}, Advance ₹${advanceAmount}`,
       }
 
