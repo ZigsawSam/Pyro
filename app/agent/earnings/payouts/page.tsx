@@ -77,7 +77,7 @@ export default function PayoutsPage() {
         shop_id: null, // Assuming this is a general payout not tied to a specific shop
         staff_id: null, // Assuming this is a general payout not tied to a specific staff
         payment_date: new Date().toISOString().split ("T")[0], // Current date in YYYY-MM-DD format
-        payment_method: "bank_transfer", // Assuming a default payment method
+        payment_method: "cash", // Assuming a default payment method
         remarks: "Agent payout request", // Optional remarks
         receipt_number: `AGT-${Date.now()}`, // Unique receipt number
       })

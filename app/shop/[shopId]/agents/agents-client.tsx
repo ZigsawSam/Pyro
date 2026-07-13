@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card } from "@/components/ui/card"
-import { Loader2, Plus, Search, Phone, UserCircle, CreditCard, UserRound } from "lucide-react"
+import { Loader2, Plus, Search, Phone, UserCircle, CreditCard, UserRound, ShieldCheck, BadgeAlert, MessageSquare, Percent } from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 import { AgentProfileDialog } from "@/components/agents/agent-profile-dialog"
@@ -35,9 +34,8 @@ interface ShopAgentsPageProps {
 
 export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps) {
   const supabase = createShopClient()
-  
   const shopId = parseInt(shopIdProp, 10)
-  
+
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -45,6 +43,10 @@ export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps
   const [showProfile, setShowProfile] = useState(false)
   const [showPayDialog, setShowPayDialog] = useState(false)
   const [showAddDialog, setShowAddDialog] = useState(false)
+
+  // Edit commission rate modal state
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
+  const [overrideRate, setOverrideRate] = useState<number>(5)
 
   useEffect(() => {
     if (!isNaN(shopId)) fetchAgents(shopId)
@@ -122,6 +124,29 @@ export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps
   const openProfile = (agent: Agent) => { setSelectedAgent(agent); setShowProfile(true) }
   const openPay = (agent: Agent) => { setSelectedAgent(agent); setShowPayDialog(true) }
 
+  const openEditRate = (agent: Agent) => {
+    setEditingAgent(agent)
+    setOverrideRate(agent.commission_rate || 5)
+  }
+
+  const handleUpdateRate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingAgent) return
+
+    try {
+      const { error } = await supabase
+        .from("shop_agents")
+        .update({ commission_rate: Number(overrideRate) })
+        .eq("id", editingAgent.link_id)
+
+      if (error) throw error
+      setEditingAgent(null)
+      if (!isNaN(shopId)) fetchAgents(shopId)
+    } catch (e) {
+      console.error("Failed to update rate:", e)
+    }
+  }
+
   if (isNaN(shopId)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -132,69 +157,241 @@ export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps
 
   return (
     <MainLayout title="Agents" subtitle="Manage agents for your shop" shopId={shopId}>
-      <div className="flex items-center justify-between mb-6">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search agents..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+      {/* Title Header Banner */}
+      <div className="flex justify-between items-center bg-white border border-border p-6 rounded-2xl mb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
+            <ShieldCheck className="w-6 h-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-foreground tracking-tight">
+              Partnership Agent Network
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Manage verified sales representatives, set individual commission margins, and accept incoming pitches.
+            </p>
+          </div>
         </div>
         <Button onClick={() => setShowAddDialog(true)}>
           <Plus className="mr-2 h-4 w-4" /> Add Agent
         </Button>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-8">
-          <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Core Partnership Roster (Left 2 columns) */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Active Sales Affiliates Table */}
+          <div className="bg-white border border-border rounded-xl p-5">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
+                Active Sales Affiliates ({filteredAgents.length})
+              </h2>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search agents..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-64 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+                    <th className="pb-3">Agent Name</th>
+                    <th className="pb-3">Phone</th>
+                    <th className="pb-3 text-center">Pending</th>
+                    <th className="pb-3 text-center">Paid</th>
+                    <th className="pb-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                      </td>
+                    </tr>
+                  ) : (
+                    <>
+                      {filteredAgents.map((agent) => (
+                        <tr key={agent.id} className="text-xs text-foreground hover:bg-muted/30 transition-all">
+                          <td className="py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 bg-muted rounded-full flex items-center justify-center">
+                                <UserCircle className="w-5 h-5 text-muted-foreground" />
+                              </div>
+                              <div>
+                                <div className="font-semibold text-sm">{agent.name}</div>
+                                <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                                  {agent.phone_number || "No phone"}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Phone className="h-3 w-3" />
+                              {agent.phone_number || "—"}
+                            </div>
+                          </td>
+                          <td className="py-4 text-center font-bold text-amber-600">
+                            ₹{Number(agent.pending_commission || 0).toLocaleString()}
+                          </td>
+                          <td className="py-4 text-center text-muted-foreground">
+                            ₹{Number(agent.paid_commission || 0).toLocaleString()}
+                          </td>
+                          <td className="py-4 text-right">
+                            <div className="inline-flex gap-1.5">
+                              <button
+                                onClick={() => openProfile(agent)}
+                                className="px-2.5 py-1.5 bg-background hover:bg-muted border border-border text-[11px] text-foreground font-semibold rounded-md transition-all flex items-center gap-1"
+                              >
+                                <UserRound className="w-3 h-3" /> Profile
+                              </button>
+                              <button
+                                onClick={() => openEditRate(agent)}
+                                className="px-2.5 py-1.5 bg-primary/10 hover:bg-primary/20 border border-primary/20 text-[11px] text-primary font-semibold rounded-md transition-all flex items-center gap-1"
+                              >
+                                <Percent className="w-3 h-3" /> Rate
+                              </button>
+                              <button
+                                onClick={() => openPay(agent)}
+                                disabled={!agent.pending_commission || agent.pending_commission <= 0}
+                                className="px-2.5 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-semibold rounded-md transition-all flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <CreditCard className="w-3 h-3" /> Pay
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredAgents.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-xs text-muted-foreground font-mono">
+                            No active partnerships found. Use the directory on the side to connect.
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Connection Pitches Received */}
+          <div className="bg-white border border-border rounded-xl p-5">
+            <h2 className="text-sm font-bold text-foreground uppercase tracking-wider mb-4 flex items-center gap-1.5">
+              <BadgeAlert className="w-4 h-4 text-primary" />
+              Connection Pitches Received
+            </h2>
+            <p className="text-xs text-muted-foreground text-center font-mono py-6">
+              No pending pitches recorded.
+            </p>
+          </div>
         </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredAgents.map((agent) => (
-            <Card key={agent.id} className="p-5 card-hover cursor-pointer group" onClick={() => openProfile(agent)}>
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <UserCircle className="h-10 w-10 text-muted-foreground" />
-                  <div>
-                    <p className="font-semibold text-base">{agent.name}</p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Phone className="h-3 w-3" /> {agent.phone_number || "No phone"}
-                    </p>
-                  </div>
+
+        {/* Affiliate Directory (Right 1 column) */}
+        <div className="bg-white border border-border rounded-xl p-5 h-fit">
+          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider mb-3">
+            Affiliate Directory
+          </h2>
+          <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+            Connect and negotiate contracts with top-tier commission agents registered in your region.
+          </p>
+
+          <div className="space-y-3">
+            {/* Placeholder directory cards - wire to your discovery API */}
+            <div className="bg-muted/40 p-3.5 rounded-xl border border-border/80">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-background rounded-lg border border-border">
+                  <UserCircle className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h4 className="text-xs text-foreground font-semibold">Aman Sharma</h4>
+                  <p className="text-[11px] text-muted-foreground font-mono">Ranchi, Jharkhand</p>
                 </div>
               </div>
-
-              <p className="text-sm text-muted-foreground mb-4">
-                {agent.description || "No description added yet."}
+              <p className="text-[11px] text-muted-foreground mt-2 bg-background/60 p-2 rounded border border-border/50">
+                "Experienced in electronics and appliance sales across residential complexes."
               </p>
+              <div className="mt-3 flex justify-between items-center border-t border-border/60 pt-2.5">
+                <span className="text-[11px] font-mono text-muted-foreground">Exp: 5 years</span>
+                <button className="px-2 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-semibold rounded transition-all">
+                  Send Invitation
+                </button>
+              </div>
+            </div>
 
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center justify-between py-2 px-3 bg-secondary/50 rounded-lg">
-                  <span className="text-sm font-medium">Pending</span>
-                  <span className="text-sm font-bold text-amber-600">₹{Number(agent.pending_commission || 0).toLocaleString()}</span>
+            <div className="bg-muted/40 p-3.5 rounded-xl border border-border/80">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-background rounded-lg border border-border">
+                  <UserCircle className="w-5 h-5 text-primary" />
                 </div>
-                <div className="flex items-center justify-between py-2 px-3 bg-secondary/30 rounded-lg">
-                  <span className="text-sm font-medium">Paid</span>
-                  <span className="text-sm text-muted-foreground">₹{Number(agent.paid_commission || 0).toLocaleString()}</span>
+                <div>
+                  <h4 className="text-xs text-foreground font-semibold">Rohit Patel</h4>
+                  <p className="text-[11px] text-muted-foreground font-mono">Patna, Bihar</p>
                 </div>
               </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={(e) => { e.stopPropagation(); openProfile(agent) }}>
-                  <UserRound className="mr-1 h-3 w-3" /> Profile
-                </Button>
-                <Button size="sm" className="flex-1" onClick={(e) => { e.stopPropagation(); openPay(agent) }} disabled={!agent.pending_commission || agent.pending_commission <= 0}>
-                  <CreditCard className="mr-1 h-3 w-3" /> Pay
-                </Button>
+              <p className="text-[11px] text-muted-foreground mt-2 bg-background/60 p-2 rounded border border-border/50">
+                "Corporate channel specialist for B2B appliance distribution."
+              </p>
+              <div className="mt-3 flex justify-between items-center border-t border-border/60 pt-2.5">
+                <span className="text-[11px] font-mono text-muted-foreground">Exp: 3 years</span>
+                <button className="px-2 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-semibold rounded transition-all">
+                  Send Invitation
+                </button>
               </div>
-            </Card>
-          ))}
-          {filteredAgents.length === 0 && (
-            <p className="text-center text-muted-foreground py-8 col-span-full">No agents found.</p>
-          )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Edit Commission Rate Dialog */}
+      {editingAgent && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleUpdateRate} className="bg-background border border-border w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">
+              Adjust Commission Rate
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Set customized percentage margin for <strong className="text-foreground">{editingAgent.name}</strong>. Future sales will reflect this rate.
+            </p>
+
+            <div className="relative">
+              <input
+                type="number"
+                step="0.1"
+                min="0.5"
+                max="100"
+                required
+                value={overrideRate}
+                onChange={(e) => setOverrideRate(Number(e.target.value))}
+                className="w-full bg-muted border border-border focus:border-primary rounded-lg py-2 px-3 pl-9 text-xs text-foreground outline-none transition-all"
+              />
+              <Percent className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+            </div>
+
+            <div className="flex gap-2 pt-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setEditingAgent(null)}
+                className="px-3 py-1.5 border border-border hover:bg-muted text-xs text-muted-foreground rounded-lg transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg transition-all"
+              >
+                Apply Override
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
