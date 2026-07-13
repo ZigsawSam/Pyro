@@ -270,7 +270,7 @@ export function ShopReportsPage({ shopId, user }: { shopId: string; user?: any }
 
   const getMonthlyCsvData = (): Record<string, string | number>[] => {
     return monthlyExpenses.map((m) => {
-      const monthKey = new Date(m.month).toISOString().slice(0, 7)
+      const monthKey = m.rawMonth
       const salesInMonth = sales.filter((s) => s.sale_date.startsWith(monthKey) && s.status === "confirmed")
       const agentsInMonth = new Set(salesInMonth.map((s) => s.agent_id)).size
       const totalSalesMonth = salesInMonth.reduce((sum, s) => sum + Number(s.amount), 0)
