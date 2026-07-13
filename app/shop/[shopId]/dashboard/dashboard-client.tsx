@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Users, DollarSign, TrendingUp, Calendar } from "lucide-react"
+import { Loader2, Users, DollarSign, TrendingUp, Calendar, Bell, Plus, FileText, Wallet, UserPlus } from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 
@@ -23,10 +23,10 @@ interface ShopDashboardPageProps {
 
 export function ShopDashboardPage({ shopId: shopIdProp, user }: ShopDashboardPageProps) {
   const supabase = createShopClient()
-  
+
   // Convert prop string to number once
   const shopId = parseInt(shopIdProp, 10)
-  
+
   const [loading, setLoading] = useState(true)
   const [shopName, setShopName] = useState("")
 
@@ -139,79 +139,184 @@ export function ShopDashboardPage({ shopId: shopIdProp, user }: ShopDashboardPag
     return (
       <MainLayout title="Dashboard" shopId={shopId} shopName={shopName} isAgent={false}>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#2563EB]" />
         </div>
       </MainLayout>
     )
   }
 
+  // --- Design System Constants ---
+  const statCards = [
+    {
+      label: "Total Agents",
+      value: stats.totalAgents,
+      prefix: "",
+      icon: Users,
+      iconBg: "bg-[#EFF6FF]",
+      iconColor: "text-[#2563EB]",
+      trend: null,
+      subtext: `${stats.totalAgents > 0 ? "Active partners" : "No agents yet"}`,
+    },
+    {
+      label: "Total Staff",
+      value: stats.totalStaff,
+      prefix: "",
+      icon: Users,
+      iconBg: "bg-[#F5F3FF]",
+      iconColor: "text-[#7C3AED]",
+      trend: null,
+      subtext: `${stats.totalStaff > 0 ? "All active" : "No staff yet"}`,
+    },
+    {
+      label: "Today's Sales",
+      value: stats.todaySales,
+      prefix: "₹",
+      icon: DollarSign,
+      iconBg: "bg-[#EFF6FF]",
+      iconColor: "text-[#2563EB]",
+      trend: "+18%",
+      subtext: "from yesterday",
+    },
+    {
+      label: "This Month",
+      value: stats.monthSales,
+      prefix: "₹",
+      icon: TrendingUp,
+      iconBg: "bg-[#F0FDF4]",
+      iconColor: "text-[#16A34A]",
+      trend: "+12%",
+      subtext: "vs last month",
+    },
+    {
+      label: "Pending Payouts",
+      value: stats.pendingPayouts,
+      prefix: "₹",
+      icon: DollarSign,
+      iconBg: "bg-[#FEF3C7]",
+      iconColor: "text-[#D97706]",
+      trend: null,
+      subtext: stats.pendingPayouts > 0 ? "Agents awaiting" : "All caught up",
+      alert: stats.pendingPayouts > 0,
+    },
+    {
+      label: "Pending Salary",
+      value: stats.pendingSalary,
+      prefix: "₹",
+      icon: Calendar,
+      iconBg: "bg-[#FDF2F8]",
+      iconColor: "text-[#DB2777]",
+      trend: null,
+      subtext: stats.pendingSalary > 0 ? "Due by 15th" : "All paid",
+      alert: stats.pendingSalary > 0,
+    },
+  ]
+
   return (
     <MainLayout title="Dashboard" shopId={shopId} shopName={shopName} isAgent={false}>
-      <div className="space-y-6">
-        {/* === 6 STAT CARDS (PRESERVED) === */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalAgents}</div>
-            </CardContent>
-          </Card>
+      <div className="max-w-[1440px] mx-auto space-y-6">
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Staff</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalStaff}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Today&apos;s Sales</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">₹{stats.todaySales.toLocaleString()}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">This Month</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">₹{stats.monthSales.toLocaleString()}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Pending Payouts</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">₹{stats.pendingPayouts.toLocaleString()}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Pending Salary</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">₹{stats.pendingSalary.toLocaleString()}</div>
-            </CardContent>
-          </Card>
+        {/* === HEADER SECTION === */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-[#0F172A] tracking-tight">
+              Dashboard
+            </h1>
+            <p className="text-slate-500 mt-1 text-sm">
+              Real-time overview of {shopName ? `'${shopName}'` : "your shop's"} financial health
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2 min-h-[44px]">
+              <Calendar className="h-4 w-4" />
+              {new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
+            </button>
+            <button className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2 min-h-[44px] active:scale-[0.98]">
+              <Plus className="h-4 w-4" />
+              Record Sale
+            </button>
+          </div>
         </div>
 
-        {/* === NEW DASHBOARD COMPONENTS === */}
+        {/* === MOBILE: HORIZONTAL SCROLL STAT CAROUSEL === */}
+        <div className="md:hidden -mx-4 px-4 overflow-x-auto pb-2 snap-x snap-mandatory flex gap-3 scrollbar-hide">
+          {statCards.slice(2, 5).map((card, i) => {
+            const Icon = card.icon
+            return (
+              <div
+                key={i}
+                className="snap-center shrink-0 w-[280px] bg-white rounded-2xl p-5 border border-slate-100 shadow-sm"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    {card.label}
+                  </span>
+                  <div className={`w-8 h-8 ${card.iconBg} rounded-lg flex items-center justify-center`}>
+                    <Icon className={`h-4 w-4 ${card.iconColor}`} />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold text-[#0F172A] tabular-nums">
+                  {card.prefix}
+                  {card.value.toLocaleString("en-IN")}
+                </div>
+                {card.trend && (
+                  <div className="flex items-center gap-1 mt-2 text-xs font-medium text-emerald-600">
+                    <TrendingUp className="h-3 w-3" />
+                    {card.trend} {card.subtext}
+                  </div>
+                )}
+                {!card.trend && card.subtext && (
+                  <div className={`mt-2 text-xs font-medium ${card.alert ? "text-amber-600" : "text-slate-500"}`}>
+                    {card.subtext}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* === DESKTOP: BENTO GRID STATS (6 CARDS) === */}
+        <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 gap-4">
+          {statCards.map((card, i) => {
+            const Icon = card.icon
+            return (
+              <Card
+                key={i}
+                className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow group"
+              >
+                <CardHeader className="flex flex-row items-center justify-between pb-2 pt-6 px-6">
+                  <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    {card.label}
+                  </CardTitle>
+                  <div
+                    className={`w-10 h-10 ${card.iconBg} rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform`}
+                  >
+                    <Icon className={`h-5 w-5 ${card.iconColor}`} />
+                  </div>
+                </CardHeader>
+                <CardContent className="px-6 pb-6">
+                  <div className="text-3xl font-bold text-[#0F172A] tabular-nums">
+                    {card.prefix}
+                    {card.value.toLocaleString("en-IN")}
+                  </div>
+                  {card.trend ? (
+                    <div className="flex items-center gap-1.5 mt-2 text-sm font-medium text-emerald-600">
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      {card.trend} {card.subtext}
+                    </div>
+                  ) : (
+                    <div
+                      className={`mt-2 text-sm ${card.alert ? "font-medium text-amber-600" : "text-slate-500"}`}
+                    >
+                      {card.subtext}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+
+        {/* === MAIN CONTENT GRID === */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <SalesTrendChart shopId={shopId} />
@@ -228,7 +333,7 @@ export function ShopDashboardPage({ shopId: shopIdProp, user }: ShopDashboardPag
           <PendingActions shopId={shopId} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6">
           <QuickActions shopId={shopId} />
           <ActivityTimeline shopId={shopId} />
         </div>
