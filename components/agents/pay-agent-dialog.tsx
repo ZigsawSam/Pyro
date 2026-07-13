@@ -17,6 +17,14 @@ interface PayAgentDialogProps {
   onPaid: () => void
 }
 
+function generateReceiptNumber(): string {
+  const now = new Date()
+  const datePart = now.toISOString().slice(0, 10).replace(/-/g, "")
+  const randomPart = Math.floor(1000 + Math.random() * 9000)
+  const timePart = now.getTime().toString().slice(-6)
+  return `PYRO-${datePart}-${timePart}-${randomPart}`
+}
+
 export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: PayAgentDialogProps) {
   const supabase = createShopClient()
   const [isLoading, setIsLoading] = useState(false)
@@ -168,19 +176,17 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
         advanceAmount = paymentAmount
       }
 
-      // Build payload dynamically — only include fields that exist in your schema
+      const receiptNumber = generateReceiptNumber()
+
+      // Build payload with receipt_number to satisfy unique constraint
       const payload: Record<string, any> = {
         shop_id: shopId,
         agent_id: agent.id,
         amount_paid: Number(paymentAmount),
         payment_date: new Date().toISOString().split("T")[0],
+        receipt_number: receiptNumber,
         remarks: `Pending ₹${pendingDeducted}, Advance ₹${advanceAmount}`,
       }
-
-      // Try to include person_type if your table supports it
-      // If this column doesn't exist, Supabase will throw an error
-      // Remove this line if your payouts table does NOT have a person_type column
-      // payload.person_type = "agent"
 
       const { error } = await supabase.from("payouts").insert(payload)
 
