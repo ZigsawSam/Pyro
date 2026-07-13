@@ -20,8 +20,11 @@ interface PayAgentDialogProps {
 function generateReceiptNumber(): string {
   const now = new Date()
   const datePart = now.toISOString().slice(0, 10).replace(/-/g, "")
-  const randomPart = Math.floor(1000 + Math.random() * 9000)
-  const timePart = now.getTime().toString().slice(-6)
+  const timePart = String(now.getHours()).padStart(2, "0") +
+                   String(now.getMinutes()).padStart(2, "0") +
+                   String(now.getSeconds()).padStart(2, "0") +
+                   String(now.getMilliseconds()).padStart(3, "0")
+  const randomPart = Math.floor(100000 + Math.random() * 900000)
   return `PYRO-${datePart}-${timePart}-${randomPart}`
 }
 
@@ -158,7 +161,6 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
     setErrorMsg(null)
 
     try {
-      // Calculate distribution
       const pendingAmt = Number(agent.pending_commission || 0)
       let pendingDeducted = 0
       let advanceAmount = 0
@@ -178,7 +180,7 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
 
       const receiptNumber = generateReceiptNumber()
 
-      // Build payload with receipt_number to satisfy unique constraint
+      // Build payload — receipt_number is REQUIRED due to unique constraint
       const payload: Record<string, any> = {
         shop_id: shopId,
         agent_id: agent.id,
@@ -188,27 +190,22 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
         remarks: `Pending ₹${pendingDeducted}, Advance ₹${advanceAmount}`,
       }
 
-      const { error } = await supabase.from("payouts").insert(payload)
+      console.log("[PayAgentDialog] Inserting payout with receipt:", receiptNumber, payload)
+
+      const { data, error } = await supabase.from("payouts").insert(payload).select()
 
       if (error) {
-        // If person_type caused the error, retry without it
-        if (error.message?.toLowerCase().includes("person_type") ||
-            error.message?.toLowerCase().includes("column") ||
-            error.message?.toLowerCase().includes("field")) {
-          const { person_type, ...retryPayload } = payload
-          const { error: retryError } = await supabase.from("payouts").insert(retryPayload)
-          if (retryError) throw retryError
-        } else {
-          throw error
-        }
+        console.error("[PayAgentDialog] Insert error:", error)
+        throw error
       }
 
+      console.log("[PayAgentDialog] Insert success:", data)
       setPaymentCompleted(true)
       onPaid()
       reset()
       onOpenChange(false)
     } catch (error: any) {
-      console.error("Payout insert failed:", error)
+      console.error("[PayAgentDialog] Payout insert failed:", error)
       const msg = error?.message || error?.error_description || "Unknown error"
       setErrorMsg(`Failed to record payment: ${msg}`)
     } finally {
