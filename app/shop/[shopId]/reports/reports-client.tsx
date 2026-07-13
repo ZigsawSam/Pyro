@@ -312,7 +312,12 @@ export function ShopReportsPage({ shopId, user }: { shopId: string; user?: any }
 
   // ─── Render ────────────────────────────────────────────
   return (
-    <MainLayout title="Reports & Analytics">
+    <MainLayout
+  title="Reports & Analytics"
+  shopId={parseInt(shopId)}
+  shopName={user?.shop_name || user?.name || ""}
+  userName={user?.name || user?.email || ""}
+>
       <div className="space-y-6">
         {/* ═══ Header ═══ */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 print:hidden">
