@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Receipt, QrCode, Wallet } from "lucide-react"
+import { Loader2, Receipt, QrCode, Wallet, AlertTriangle } from "lucide-react"
 import QRCode from "qrcode"
 import { createShopClient } from "@/lib/supabase/shop-client"
 
@@ -30,6 +30,7 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
   const [timeLeft, setTimeLeft] = useState(300)
   const [paymentAmount, setPaymentAmount] = useState(0)
   const [paymentCompleted, setPaymentCompleted] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !agent) return
@@ -67,6 +68,7 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
     setPaymentAmount(0)
     setPaymentCompleted(false)
     setShowStatement(false)
+    setErrorMsg(null)
   }
 
   useEffect(() => {
@@ -85,6 +87,7 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
   const handleCreatePayout = async (amount: number) => {
     if (!agent) return
     setIsLoading(true)
+    setErrorMsg(null)
     try {
       const amountLabel = Number(amount).toFixed(2)
       let paymentPayload = ""
@@ -122,6 +125,7 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
       setQrType(paymentType)
     } catch (error) {
       console.error(error)
+      setErrorMsg("Failed to generate QR code. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -140,50 +144,71 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
   }
 
   const handleConfirmPayment = async () => {
-  if (!agent || !paymentAmount) return
+    if (!agent || !paymentAmount) return
 
-  setIsLoading(true)
-  try {
-    // Calculate distribution
-    const pendingAmount = Number(agent.pending_commission || 0)
+    setIsLoading(true)
+    setErrorMsg(null)
+
+    try {
+      // Calculate distribution
+      const pendingAmt = Number(agent.pending_commission || 0)
       let pendingDeducted = 0
       let advanceAmount = 0
 
-      if (pendingAmount > 0) {
-      if (paymentAmount >= pendingAmount) {
-        pendingDeducted = pendingAmount
-        advanceAmount = paymentAmount - pendingAmount
+      if (pendingAmt > 0) {
+        if (paymentAmount >= pendingAmt) {
+          pendingDeducted = pendingAmt
+          advanceAmount = paymentAmount - pendingAmt
+        } else {
+          pendingDeducted = paymentAmount
+          advanceAmount = 0
+        }
       } else {
-        pendingDeducted = paymentAmount
-        advanceAmount = 0
-      }
-      } else {
-      pendingDeducted = 0
-      advanceAmount = paymentAmount
+        pendingDeducted = 0
+        advanceAmount = paymentAmount
       }
 
-      const { error } = await supabase.from("payouts").insert({
-      shop_id: shopId,
-      agent_id: agent.id,
-      person_type: "agent",
-      amount_paid: Number(paymentAmount),
-      payment_date: new Date().toISOString().split("T")[0],
-      remarks: `QR: Pending ₹${pendingDeducted}, Advance ₹${advanceAmount}`,
-      })
+      // Build payload dynamically — only include fields that exist in your schema
+      const payload: Record<string, any> = {
+        shop_id: shopId,
+        agent_id: agent.id,
+        amount_paid: Number(paymentAmount),
+        payment_date: new Date().toISOString().split("T")[0],
+        remarks: `Pending ₹${pendingDeducted}, Advance ₹${advanceAmount}`,
+      }
 
-      if (error) throw error
+      // Try to include person_type if your table supports it
+      // If this column doesn't exist, Supabase will throw an error
+      // Remove this line if your payouts table does NOT have a person_type column
+      // payload.person_type = "agent"
+
+      const { error } = await supabase.from("payouts").insert(payload)
+
+      if (error) {
+        // If person_type caused the error, retry without it
+        if (error.message?.toLowerCase().includes("person_type") ||
+            error.message?.toLowerCase().includes("column") ||
+            error.message?.toLowerCase().includes("field")) {
+          const { person_type, ...retryPayload } = payload
+          const { error: retryError } = await supabase.from("payouts").insert(retryPayload)
+          if (retryError) throw retryError
+        } else {
+          throw error
+        }
+      }
 
       setPaymentCompleted(true)
       onPaid()
       reset()
       onOpenChange(false)
-      } catch (error) {
-      console.error(error)
-      alert("Failed to record payment")
-      } finally {
+    } catch (error: any) {
+      console.error("Payout insert failed:", error)
+      const msg = error?.message || error?.error_description || "Unknown error"
+      setErrorMsg(`Failed to record payment: ${msg}`)
+    } finally {
       setIsLoading(false)
-      }
     }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(value) => { if (!value) reset(); onOpenChange(value) }}>
@@ -191,6 +216,13 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
         <DialogHeader>
           <DialogTitle>Pay Agent</DialogTitle>
         </DialogHeader>
+
+        {errorMsg && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-red-700">{errorMsg}</p>
+          </div>
+        )}
 
         {!qrValue ? (
           <div className="space-y-4">
@@ -289,5 +321,4 @@ export function PayAgentDialog({ open, onOpenChange, shopId, agent, onPaid }: Pa
       </DialogContent>
     </Dialog>
   )
-  
 }

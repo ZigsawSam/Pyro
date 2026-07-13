@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Loader2, Plus, Search, Phone, UserCircle, CreditCard, UserRound, ShieldCheck, BadgeAlert, MessageSquare, Percent } from "lucide-react"
+import { Loader2, Plus, Search, Phone, UserCircle, CreditCard, UserRound, ShieldCheck, BadgeAlert, MessageSquare, Percent, MapPin, Briefcase } from "lucide-react"
 import { createShopClient } from "@/lib/supabase/shop-client"
 import { MainLayout } from "@/components/layout/main-layout"
 import { AgentProfileDialog } from "@/components/agents/agent-profile-dialog"
@@ -27,6 +27,16 @@ interface Agent {
   paid_commission?: number
 }
 
+interface UnlinkedAgent {
+  id: number
+  name: string
+  phone_number?: string
+  description?: string
+  city?: string
+  state?: string
+  experience_years?: number
+}
+
 interface ShopAgentsPageProps {
   shopId: string
   user?: any
@@ -37,7 +47,9 @@ export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps
   const shopId = parseInt(shopIdProp, 10)
 
   const [agents, setAgents] = useState<Agent[]>([])
+  const [unlinkedAgents, setUnlinkedAgents] = useState<UnlinkedAgent[]>([])
   const [loading, setLoading] = useState(true)
+  const [directoryLoading, setDirectoryLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [showProfile, setShowProfile] = useState(false)
@@ -49,7 +61,10 @@ export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps
   const [overrideRate, setOverrideRate] = useState<number>(5)
 
   useEffect(() => {
-    if (!isNaN(shopId)) fetchAgents(shopId)
+    if (!isNaN(shopId)) {
+      fetchAgents(shopId)
+      fetchUnlinkedAgents(shopId)
+    }
   }, [shopId])
 
   const fetchAgents = async (sid: number) => {
@@ -113,6 +128,62 @@ export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps
       setAgents(formatted)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
+  }
+
+  const fetchUnlinkedAgents = async (sid: number) => {
+    setDirectoryLoading(true)
+    try {
+      // Get all agent IDs already linked to this shop
+      const { data: links, error: linkError } = await supabase
+        .from("shop_agents")
+        .select("agent_id")
+        .eq("shop_id", sid)
+
+      if (linkError) throw linkError
+
+      const linkedAgentIds = (links || []).map((l) => l.agent_id)
+
+      // Fetch agents NOT linked to this shop
+      let query = supabase
+        .from("agents")
+        .select("id, name, phone_number, description, city, state, experience_years")
+        .order("name", { ascending: true })
+        .limit(20)
+
+      if (linkedAgentIds.length > 0) {
+        query = query.not("id", "in", `(${linkedAgentIds.join(",")})`)
+      }
+
+      const { data: unlinkedData, error: unlinkedError } = await query
+
+      if (unlinkedError) throw unlinkedError
+      setUnlinkedAgents(unlinkedData || [])
+    } catch (e) {
+      console.error("Failed to fetch unlinked agents:", e)
+      setUnlinkedAgents([])
+    } finally {
+      setDirectoryLoading(false)
+    }
+  }
+
+  const handleInviteAgent = async (agentId: number) => {
+    try {
+      const { error } = await supabase
+        .from("shop_agents")
+        .insert({
+          shop_id: shopId,
+          agent_id: agentId,
+          commission_rate: 5, // default rate
+        })
+
+      if (error) throw error
+      // Refresh both lists
+      fetchAgents(shopId)
+      fetchUnlinkedAgents(shopId)
+    } catch (e) {
+      console.error("Failed to invite agent:", e)
+      alert("Failed to send invitation. Please try again.")
+    }
   }
 
   const filteredAgents = agents.filter(
@@ -295,7 +366,7 @@ export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps
           </div>
         </div>
 
-        {/* Affiliate Directory (Right 1 column) */}
+        {/* Affiliate Directory (Right 1 column) — DYNAMIC, NOT HARDCODED */}
         <div className="bg-white border border-border rounded-xl p-5 h-fit">
           <h2 className="text-sm font-bold text-foreground uppercase tracking-wider mb-3">
             Affiliate Directory
@@ -305,48 +376,49 @@ export function ShopAgentsPage({ shopId: shopIdProp, user }: ShopAgentsPageProps
           </p>
 
           <div className="space-y-3">
-            {/* Placeholder directory cards - wire to your discovery API */}
-            <div className="bg-muted/40 p-3.5 rounded-xl border border-border/80">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-background rounded-lg border border-border">
-                  <UserCircle className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h4 className="text-xs text-foreground font-semibold">Aman Sharma</h4>
-                  <p className="text-[11px] text-muted-foreground font-mono">Ranchi, Jharkhand</p>
-                </div>
+            {directoryLoading ? (
+              <div className="py-8 flex items-center justify-center">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
-              <p className="text-[11px] text-muted-foreground mt-2 bg-background/60 p-2 rounded border border-border/50">
-                "Experienced in electronics and appliance sales across residential complexes."
+            ) : unlinkedAgents.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center font-mono py-6">
+                No available agents in the directory. All registered agents are already connected.
               </p>
-              <div className="mt-3 flex justify-between items-center border-t border-border/60 pt-2.5">
-                <span className="text-[11px] font-mono text-muted-foreground">Exp: 5 years</span>
-                <button className="px-2 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-semibold rounded transition-all">
-                  Send Invitation
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-muted/40 p-3.5 rounded-xl border border-border/80">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-background rounded-lg border border-border">
-                  <UserCircle className="w-5 h-5 text-primary" />
+            ) : (
+              unlinkedAgents.map((agent) => (
+                <div key={agent.id} className="bg-muted/40 p-3.5 rounded-xl border border-border/80">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-background rounded-lg border border-border">
+                      <UserCircle className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs text-foreground font-semibold">{agent.name}</h4>
+                      <p className="text-[11px] text-muted-foreground font-mono flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {agent.city || "Unknown"}{agent.state ? `, ${agent.state}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  {agent.description && (
+                    <p className="text-[11px] text-muted-foreground mt-2 bg-background/60 p-2 rounded border border-border/50">
+                      "{agent.description}"
+                    </p>
+                  )}
+                  <div className="mt-3 flex justify-between items-center border-t border-border/60 pt-2.5">
+                    <span className="text-[11px] font-mono text-muted-foreground flex items-center gap-1">
+                      <Briefcase className="w-3 h-3" />
+                      Exp: {agent.experience_years ? `${agent.experience_years} years` : "N/A"}
+                    </span>
+                    <button
+                      onClick={() => handleInviteAgent(agent.id)}
+                      className="px-2 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-semibold rounded transition-all"
+                    >
+                      Send Invitation
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-xs text-foreground font-semibold">Rohit Patel</h4>
-                  <p className="text-[11px] text-muted-foreground font-mono">Patna, Bihar</p>
-                </div>
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-2 bg-background/60 p-2 rounded border border-border/50">
-                "Corporate channel specialist for B2B appliance distribution."
-              </p>
-              <div className="mt-3 flex justify-between items-center border-t border-border/60 pt-2.5">
-                <span className="text-[11px] font-mono text-muted-foreground">Exp: 3 years</span>
-                <button className="px-2 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-semibold rounded transition-all">
-                  Send Invitation
-                </button>
-              </div>
-            </div>
+              ))
+            )}
           </div>
         </div>
       </div>
